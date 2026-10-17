@@ -1,0 +1,53 @@
+name: 功能建议
+description: 想要新功能，或觉得某处可以更好
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提之前建议先看一眼 [README 的功能表](../#二快速开始) 和
+        [CHANGELOG](../blob/main/CHANGELOG.md)，也许已经有类似能力了。
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你遇到的不方便
+      description: 先说场景，再说方案 —— 「我想要 X」不如「我做 Y 时卡在 Z」
+      placeholder: 每次下完一集都要手动去改文件名，因为我用的播放器只认 SxxExx。
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 你希望的方案
+      placeholder: |
+        命名规则里加一个 Emby 风格的预设：
+        动漫名/Season 01/动漫名 S01E01.mp4
+        （其实界面里已经有 emby 命名方案，如果没生效请按 Bug 报告）
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: 影响哪个版本
+      multiple: true
+      options:
+        - 桌面版
+        - Python 版
+        - Docker 版
+        - 都影响（属于 source/ 里的公共逻辑）
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 你考虑过的其它做法
+      placeholder: 或者现在是怎么绕过去的
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: 确认
+      options:
+        - label: 这个功能不涉及绕过付费、破解 DRM、或分发受版权保护的内容
+          required: true

@@ -1,0 +1,29 @@
+# 统一编辑器配置，减少无关的格式 diff
+# https://editorconfig.org
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{js,css,json,yml,yaml}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+# Windows 脚本必须是 CRLF，否则 PowerShell 5.1 / cmd 可能报错
+[*.{ps1,bat,cmd}]
+end_of_line = crlf
+
+# Shell 脚本必须是 LF，否则 Linux 上会报 bad interpreter
+[*.sh]
+end_of_line = lf
+
+[*.{nsi,nsh}]
+end_of_line = crlf
