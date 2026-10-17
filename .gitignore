@@ -1,0 +1,46 @@
+# 虚拟环境与缓存
+.venv/
+__pycache__/
+*.py[cod]
+.tmp/
+*.pyc
+
+# ---------------------------------------------------------------- 运行期数据
+# 数据库（含 WAL/SHM）、设置
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/settings.json
+
+# 运行期生成的图片 / 缓存目录
+data/*.png
+data/backgrounds/
+data/thumbs/
+data/.sniffer-tmp/
+
+# **内置浏览器内核与 Node**（约 540 MB，绝不进版本库）
+# 本地版由 tools/fetch_* 或手动放置；Docker 版在镜像构建时下载到 /opt/pwt
+data/_pwt/
+
+# 临时抽帧 / 广告检测中断留下的目录（前缀固定，方便识别）
+data/_frames/
+addetect_*/
+
+# 日志与下载
+logs/*.log*
+downloads/*
+!downloads/.gitkeep
+
+# ---------------------------------------------------------------- 外部二进制
+# 各平台可执行文件太大且需按平台取，统一不进版本库
+tools/ffmpeg.exe
+tools/ffmpeg/
+tools/*.exe
+tools/*.dll
+
+# ---------------------------------------------------------------- Docker
+docker-data/
+# 本机的 compose 变量（含你自己的磁盘路径），不要提交；模板是 .env.example
+.env
+anime-downloader-*.tar
+anime-downloader-*.tar.sha256

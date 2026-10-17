@@ -1,0 +1,26 @@
+# 构建镜像时不需要的东西（用来缩小镜像、加快构建）
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+.git/
+.gitignore
+
+# 运行期数据（容器里用挂卷，不能打进镜像）
+data/
+logs/
+downloads/
+docker-data/
+
+# Windows 专用二进制：Linux 镜像里用不上（镜像内会另装 Linux 版）
+tools/ffmpeg.exe
+
+# 本地版的内置内核（500MB+，Windows 二进制）；Docker 镜像里另下 Linux 版
+data/_pwt/
+
+# 本地脚本与备份
+*.bak
+*.orig
+*.log
+.DS_Store
+Thumbs.db

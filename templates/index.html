@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-bs-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ app_name }} ({{ app_name_en }}) · 动漫下载器</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <!-- 带 ?v= 版本参数：改了前端就一定拿到新文件，不会被浏览器缓存卡住 -->
+  <link rel="stylesheet" href="/static/vendor/bootstrap.min.css?v={{ version }}">
+  <link rel="stylesheet" href="/static/vendor/bootstrap-icons.css?v={{ version }}">
+  <link rel="stylesheet" href="/static/css/app.css?v={{ version }}">
+  <script>
+    /* 在样式表之后、页面渲染之前先套用缓存的外观，避免刷新时闪一下亮色 */
+    (function () {
+      try {
+        var cached = JSON.parse(localStorage.getItem('anime-downloader-appearance')
+          || localStorage.getItem('moanime-appearance') || '{}');
+        var root = document.documentElement;
+        var theme = cached.theme === 'dark' ? 'dark' : 'light';
+        root.dataset.theme = theme;
+        root.dataset.bsTheme = theme;
+        if (cached.bg_image) {
+          var url = /^https?:\/\//i.test(cached.bg_image)
+            ? cached.bg_image
+            : '/api/appearance/background/file/' + encodeURIComponent(cached.bg_image);
+          root.style.setProperty('--app-bg-image', 'url("' + url.replace(/"/g, '%22') + '")');
+          root.classList.add('has-bg');
+        }
+        if (cached.bg_blur) root.style.setProperty('--app-bg-blur', cached.bg_blur + 'px');
+        if (cached.bg_dim) root.style.setProperty('--app-bg-dim', (cached.bg_dim / 100));
+        if (cached.bg_panel_alpha) {
+          root.style.setProperty('--panel-alpha', cached.bg_panel_alpha + '%');
+          root.style.setProperty('--panel-hover-alpha',
+            Math.min(100, Number(cached.bg_panel_alpha) + 8) + '%');
+        }
+        if (cached.bg_fit) {
+          root.style.setProperty('--app-bg-size',
+            cached.bg_fit === 'contain' ? 'contain' : (cached.bg_fit === 'repeat' ? 'auto' : 'cover'));
+          root.style.setProperty('--app-bg-repeat',
+            cached.bg_fit === 'repeat' ? 'repeat' : 'no-repeat');
+        }
+        if (cached.title_color) root.style.setProperty('--app-title-color', cached.title_color);
+        /* 自定义配色：空值表示跟随主题，所以只在有值时才设内联变量 */
+        var colorVars = {
+          accent_color: ['--primary', '--primary-dark'],
+          bg_color: ['--bg'],
+          panel_color: ['--panel'],
+          panel_2_color: ['--panel-2'],
+        };
+        Object.keys(colorVars).forEach(function (key) {
+          var v = String(cached[key] || '').trim();
+          if (!v) return;
+          colorVars[key].forEach(function (name) { root.style.setProperty(name, v); });
+        });
+        if (cached.accent_color) {
+          root.style.setProperty('--primary-soft',
+            'color-mix(in srgb, ' + cached.accent_color + ' 14%, var(--panel))');
+        }
+        /* 底色一变，文字色必须跟着变，否则深色底配深色字 = 全看不清。
+           这里用相对亮度判断底色深浅（和 app.js 的 applyColors 同一套规则）。 */
+        function lum(hex) {
+          var m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(hex || '').trim());
+          if (!m) return null;
+          var h = m[1];
+          if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+          var v = [0, 2, 4].map(function (i) {
+            var c = parseInt(h.substr(i, 2), 16) / 255;
+            return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+          });
+          return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2];
+        }
+        var bases = [cached.bg_color, cached.panel_color]
+          .map(lum).filter(function (v) { return v !== null; });
+        if (bases.length) {
+          var onDark = Math.max.apply(null, bases) < 0.35;
+          var vars = onDark
+            ? { '--fg': '#e8ecf3', '--fg-dim': '#a5aebd', '--fg-mute': '#6d7686',
+                '--line': '#2b323d', '--line-strong': '#3a4250', '--hover': '#262d38' }
+            : { '--fg': '#1f2430', '--fg-dim': '#5b6474', '--fg-mute': '#98a1b0',
+                '--line': '#e3e8f0', '--line-strong': '#cdd5e1', '--hover': '#eef2f9' };
+          Object.keys(vars).forEach(function (k) { root.style.setProperty(k, vars[k]); });
+        }
+        /* 动效档位：off 时连首屏动画都不要跑，避免"先动一下再静止" */
+        root.dataset.anim = (cached.anim === 'subtle' || cached.anim === 'off')
+          ? cached.anim : 'full';
+      } catch (e) { /* 缓存损坏就按默认外观走 */ }
+    })();
+  </script>
+</head>
+<body>
+<div class="app-shell">
+  <!-- ==================== 左侧：标题 + 垂直标签页 + 状态 ==================== -->
+  <aside class="sidebar">
+    <div class="sidebar-head">
+      <h1 class="page-title">{{ app_name }} {{ app_name_en }}</h1>
+    </div>
+
+    <nav class="tabs">
+      <div class="tab active" data-view="search" title="番剧搜索"><i class="bi bi-search"></i><span class="tab-label">番剧搜索</span></div>
+      <div class="tab" data-view="sources" title="动漫源"><i class="bi bi-hdd-stack"></i><span class="tab-label">动漫源</span>
+        <span class="badge badge-soft" id="nav-source-count">0</span></div>
+      <div class="tab" data-view="tasks" title="下载任务"><i class="bi bi-download"></i><span class="tab-label">下载任务</span>
+        <span class="badge badge-soft" id="nav-task-count">0</span></div>
+      <div class="tab" data-view="library" title="番剧库"><i class="bi bi-folder2"></i><span class="tab-label">番剧库</span></div>
+      <div class="tab" data-view="settings" title="设置"><i class="bi bi-sliders2"></i><span class="tab-label">设置</span></div>
+      <div class="tab" data-view="logs" title="系统日志"><i class="bi bi-terminal"></i><span class="tab-label">系统日志</span></div>
+    </nav>
+
+    <div class="sidebar-foot">
+      <button class="theme-toggle" id="btn-theme-toggle"
+              title="切换亮色 / 暗色（更多外观设置见「设置 · 外观自定义」）">
+        <i class="bi bi-moon-stars"></i></button>
+      <div class="ticker" id="ticker">
+        <span class="live" id="tick-live">● STANDBY</span>
+        <span>源 <b id="tick-sources">0</b></span>
+        <span>任务 <b id="tick-tasks">0</b></span>
+        <span>速度 <b id="tick-speed">--</b></span>
+        <span id="conn-state">已连接</span>
+        <span id="tick-meta">{{ app_name_en }} v{{ version }}</span>
+        <span id="tick-front"></span>
+        <span class="sr-only" id="tick-view">番剧搜索</span>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <!-- ---------------------------------------------------- 检索 -->
+    <section class="view active" id="view-search">
+      <div class="card">
+        <div class="card-body">
+          <div class="search-bar">
+            <select class="form-select" id="search-mode" title="检索方式">
+              <option value="aggregate">自动聚合</option>
+              <option value="single">仅第一个源</option>
+              <option value="all">全部启用源</option>
+            </select>
+            <input type="text" class="form-control" id="search-keyword" placeholder="输入番剧名称…（回车检索）">
+            <button class="btn btn-primary" id="btn-search"><i class="bi bi-search"></i> 搜索</button>
+            <button class="btn btn-outline-light" id="btn-search-history" title="检索历史">
+              <i class="bi bi-clock-history"></i></button>
+          </div>
+          <div class="rail-label">参与检索的源 · 勾选决定是否参与，顺序即优先级</div>
+          <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+            <button class="btn btn-outline-light btn-sm" id="btn-select-all-sources">全选</button>
+            <button class="btn btn-outline-light btn-sm" id="btn-select-none-sources">全不选</button>
+            <span class="text-dim" style="font-size:12px">拖动排序、增删源请到「动漫源」标签页</span>
+            <span class="spacer" style="flex:1"></span>
+            <span class="led-legend">
+              <span><i class="led on"></i>可用</span>
+              <span><i class="led err"></i>有报错</span>
+              <span><i class="led off"></i>未测</span>
+            </span>
+          </div>
+          <div class="source-picker" id="search-source-picker"></div>
+          <div class="rail-label" style="margin-top:14px">检索历史 · 点一下直接搜</div>
+          <div class="chip-bar" id="search-history-chips"></div>
+        </div>
+      </div>
+
+      <div class="card" id="episode-card" style="display:none">
+        <div class="card-head">
+          <h3><i class="bi bi-collection-play"></i> <span id="episode-anime-name">剧集</span></h3>
+          <span class="badge badge-dim" id="episode-source"></span>
+          <div class="spacer"></div>
+          <span class="text-dim mono" id="episode-count"></span>
+          <button class="btn btn-outline-light btn-sm" id="btn-episode-clear"><i class="bi bi-x-lg"></i></button>
+        </div>
+        <div class="card-body">
+          <div class="ep-source-bar">
+            <span class="rail-label" style="margin:0">下载源</span>
+            <div class="ep-source-picker" id="episode-source-picker"></div>
+            <span class="text-dim" id="episode-source-hint" style="font-size:11.5px"></span>
+            <span class="spacer" style="flex:1"></span>
+            <label class="form-check form-switch d-inline-flex align-items-center gap-1 mb-0"
+                   title="关闭（默认）：只从上面选中的源下载，解析失败就直接报错。开启：失败时自动换其它源重试同一集。">
+              <input class="form-check-input" type="checkbox" id="ep-auto-fallback">
+              <span class="form-check-label" style="font-size:12px">失败自动换源</span>
+            </label>
+          </div>
+          <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+            <button class="btn btn-primary btn-sm" id="btn-download-all-eps"><i class="bi bi-download"></i> 下载全部</button>
+            <button class="btn btn-outline-light btn-sm" id="btn-download-selected-eps"><i class="bi bi-check2-square"></i> 下载选中</button>
+            <button class="btn btn-outline-light btn-sm" id="btn-invert-eps">反选</button>
+            <button class="btn btn-outline-light btn-sm" id="btn-subtitle-auto">
+              <i class="bi bi-badge-cc"></i> 下载字幕</button>
+            <button class="btn btn-outline-light btn-sm" id="btn-duration-check"
+                    title="完整广告体检（两条通道一起跑，检测完自动把问题源排到末尾）｜时长通道：只对比各源都给出同一集的那些源，查插播广告片 / 内容残缺 ｜ 画面文字通道：各源只下开头 20 秒抽帧 OCR，查「本片由 xxx 赞助发布 / 主营：棋牌 捕鱼」这类叠上去的字幕广告（它不改变时长，所以时长通道查不到）｜ 建议：先在剧集面板点选某一集再体检，各源才会去取同一集，时长对比才准确">
+              <i class="bi bi-shield-exclamation"></i> 广告体检</button>
+            <span class="text-dim ms-1" style="font-size:12px">同一集重复下载会覆盖原文件</span>
+          </div>
+          <div id="episode-list" class="ep-strip"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h3><i class="bi bi-list-stars"></i> 检索结果</h3>
+          <span class="badge badge-dim" id="search-summary">尚未检索</span>
+          <div class="spacer"></div>
+          <span class="text-dim mono" id="search-elapsed"></span>
+        </div>
+        <div class="card-body flush" id="search-results">
+          <div class="empty"><i class="bi bi-inboxes"></i>输入番剧名称后点击搜索</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------------------------------------------------- 动漫源 -->
+    <section class="view" id="view-sources">
+      <div class="view-head">
+        <div>
+          <h2>动漫源管理</h2>
+          <div class="desc">拖动手柄调整优先级；勾选框决定该源是否参与检索</div>
+        </div>
+        <div class="ops">
+          <button class="btn btn-primary btn-sm" id="btn-source-add"><i class="bi bi-plus-lg"></i> 添加源</button>
+          <button class="btn btn-outline-light btn-sm" id="btn-source-wizard"><i class="bi bi-magic"></i> 自动探测</button>
+          <button class="btn btn-outline-light btn-sm" id="btn-source-import"><i class="bi bi-upload"></i> 导入</button>
+          <button class="btn btn-outline-light btn-sm" id="btn-source-export"><i class="bi bi-download"></i> 导出</button>
+          <button class="btn btn-outline-light btn-sm" id="btn-source-check-all"><i class="bi bi-heart-pulse"></i> 全部测活</button>
+          <button class="btn btn-outline-light btn-sm" id="btn-source-demote-ads"
+                  title="把所有标了「含广告」的源移到列表最后"><i class="bi bi-flag"></i> 广告源排最后</button>
+          <button class="btn btn-outline-light btn-sm" id="btn-source-save-order"><i class="bi bi-save"></i> 保存顺序</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h3><i class="bi bi-list-ol"></i> 源列表</h3>
+          <span class="badge badge-dim" id="source-summary"></span>
+          <div class="spacer"></div>
+          <span class="text-dim" style="font-size:12.5px">共 <b id="source-total">0</b> 个 · 启用 <b id="source-enabled">0</b> 个</span>
+        </div>
+        <div class="rack-toolbar">
+          <span class="rail-label" style="margin:0">一键排序</span>
+          <div class="sort-group" id="source-sort-group">
+            <button class="btn btn-outline-light btn-sm" data-sort="smart"
+                    title="按质量分排：可用性 + 内容量 + 响应速度 + 干净度（0~100）">
+              <i class="bi bi-stars"></i> 智能排序</button>
+            <button class="btn btn-outline-light btn-sm" data-sort="health"
+                    title="能用的排前面，有报错的沉底"><i class="bi bi-heart-pulse"></i> 可用优先</button>
+            <button class="btn btn-outline-light btn-sm" data-sort="hits"
+                    title="检索命中条目多的排前面"><i class="bi bi-graph-up"></i> 命中最多</button>
+            <button class="btn btn-outline-light btn-sm" data-sort="enabled"
+                    title="已启用的排前面"><i class="bi bi-toggle-on"></i> 启用优先</button>
+            <button class="btn btn-outline-light btn-sm" data-sort="name"
+                    title="按名称排序（不受广告标记影响）"><i class="bi bi-sort-alpha-down"></i> 名称</button>
+            <button class="btn btn-outline-light btn-sm" data-sort="ad"
+                    title="把标了「含广告/残缺」的源移到最前，方便集中处理"><i class="bi bi-flag"></i> 广告置顶</button>
+            <button class="btn btn-ghost btn-sm" data-sort="manual"
+                    title="恢复为内置源的原始顺序"><i class="bi bi-arrow-counterclockwise"></i> 默认顺序</button>
+          </div>
+          <button class="btn btn-outline-light btn-sm" id="btn-source-probe"
+                  title="并发给每个源测活并抽样检索，采集响应耗时与命中数；智能排序的「内容量 / 响应速度」两项依赖这次采样">
+            <i class="bi bi-speedometer2"></i> 质量采样</button>
+          <span class="spacer" style="flex:1"></span>
+          <span class="text-dim" style="font-size:12px" id="source-sort-hint"></span>
+        </div>
+        <div class="priority-hint">
+          排序越靠前越先展示；点「测试」会逐个接口报告「条目数 / 剧集数 / 是否 m3u8 直链」，
+          解析异常时从这里排查。失效的源取消勾选即可，不影响其它源。
+        </div>
+        <div class="card-body flush"><div class="rack" id="source-list"></div></div>
+      </div>
+    </section>
+
+    <!-- ---------------------------------------------------- 下载任务 -->
+    <section class="view" id="view-tasks">
+      <div class="view-head">
+        <div>
+          <h2>下载任务管理</h2>
+          <div class="desc">实时进度、速度与分片状态；支持暂停、继续、重试与删除</div>
+        </div>
+        <div class="ops">
+          <!-- 主任务（继续/暂停）用主色，次要维护动作降为描边，
+               危险的「全部删除」再降一档：默认灰字，悬停才变红 -->
+          <button class="btn btn-primary btn-sm" id="btn-task-resume-all"><i class="bi bi-play-fill"></i> 全部继续</button>
+          <button class="btn btn-outline-light btn-sm" id="btn-task-pause-all"><i class="bi bi-pause-fill"></i> 全部暂停</button>
+          <button class="btn btn-outline-light btn-sm" id="btn-task-retry-all"
+                  title="重新提交所有失败 / 已取消的任务（会重新解析视频地址）"><i class="bi bi-arrow-clockwise"></i> 全部重试</button>
+          <button class="btn btn-outline-light btn-sm" id="btn-task-clear-pending"><i class="bi bi-x-circle"></i> 清空排队</button>
+          <button class="btn btn-outline-light btn-sm" id="btn-task-open-dir"><i class="bi bi-folder2-open"></i> 打开目录</button>
+          <div class="ops-more">
+            <button class="btn btn-ghost btn-sm" id="btn-ops-toggle"
+                    title="更多维护操作"><i class="bi bi-three-dots"></i></button>
+            <div class="ops-menu" id="ops-menu">
+              <button class="btn btn-outline-light btn-sm" id="btn-task-clean-dirs"><i class="bi bi-folder-x"></i> 清理空文件夹</button>
+              <button class="btn btn-outline-light btn-sm" id="btn-task-clear"><i class="bi bi-eraser"></i> 清理已结束</button>
+              <button class="btn btn-danger btn-sm" id="btn-task-delete-all"
+                      title="删除全部任务记录（不动磁盘上的视频文件）">
+                <i class="bi bi-trash3"></i> 全部删除</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card"><div class="stat-strip" id="task-stats"></div></div>
+
+      <div class="card">
+        <div class="card-head">
+          <h3><i class="bi bi-list-check"></i> 任务列表</h3>
+          <div class="spacer"></div>
+          <select class="form-select form-select-sm" id="task-filter" style="width:auto">
+            <option value="all">全部状态</option>
+            <option value="running,queued,paused">进行中</option>
+            <option value="completed">已完成</option>
+            <option value="failed,canceled">失败/取消</option>
+          </select>
+          <button class="btn btn-outline-light btn-sm" id="btn-task-refresh"><i class="bi bi-arrow-clockwise"></i></button>
+        </div>
+        <div class="card-body flush" id="task-list">
+          <div class="empty"><i class="bi bi-inbox"></i>暂无下载任务</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------------------------------------------------- 番剧库 -->
+    <section class="view" id="view-library">
+      <div class="view-head">
+        <div>
+          <h2>本地番剧库</h2>
+          <div class="desc">扫描下载目录中已完成的文件；展开可逐集预览或删除</div>
+        </div>
+        <div class="ops">
+          <button class="btn btn-outline-light btn-sm" id="btn-library-refresh"><i class="bi bi-arrow-clockwise"></i> 重新扫描</button>
+          <button class="btn btn-outline-light btn-sm" id="btn-library-clean"><i class="bi bi-eraser"></i> 清理失效记录</button>
+          <button class="btn btn-outline-light btn-sm" id="btn-library-open"><i class="bi bi-folder2-open"></i> 打开目录</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h3><i class="bi bi-collection"></i> 已下载</h3>
+          <span class="badge badge-dim" id="library-summary"></span>
+          <div class="spacer"></div>
+          <input class="form-control form-control-sm" id="library-filter" placeholder="筛选番剧名…" style="width:190px">
+        </div>
+        <div class="card-body flush" id="library-list">
+          <div class="empty"><i class="bi bi-folder2"></i>暂无已下载内容</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------------------------------------------------- 设置 -->
+    <section class="view" id="view-settings">
+      <div class="view-head">
+        <div>
+          <h2>设置</h2>
+          <div class="desc">下载位置、并发、命名规则、网络与后处理；保存后立即生效（端口需重启）</div>
+        </div>
+        <div class="ops">
+          <button class="btn btn-primary btn-sm" id="btn-settings-save"><i class="bi bi-save"></i> 保存设置</button>
+          <button class="btn btn-outline-light btn-sm" id="btn-settings-reset"><i class="bi bi-arrow-counterclockwise"></i> 恢复默认</button>
+        </div>
+      </div>
+      <div id="settings-form"></div>
+    </section>
+
+    <!-- ---------------------------------------------------- 系统日志 -->
+    <section class="view" id="view-logs">
+      <div class="view-head">
+        <div>
+          <h2>系统日志</h2>
+          <div class="desc">检索、解析、下载与合并的实时日志；最多保留 800 行</div>
+        </div>
+        <div class="ops">
+          <select class="form-select form-select-sm" id="log-level" style="width:auto">
+            <option value="ALL">全部级别</option>
+            <option value="INFO">INFO 以上</option>
+            <option value="WARNING">WARNING 以上</option>
+            <option value="ERROR">仅 ERROR</option>
+          </select>
+          <button class="btn btn-outline-light btn-sm" id="btn-log-autoscroll"><i class="bi bi-arrow-down-circle"></i> 自动滚动</button>
+          <button class="btn btn-outline-light btn-sm" id="btn-log-clear"><i class="bi bi-trash3"></i> 清空</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3><i class="bi bi-terminal"></i> 日志流</h3>
+          <div class="spacer"></div>
+          <span class="text-dim" id="foot-ffmpeg">--</span>
+          <span class="text-dim">· <span id="foot-stats">--</span></span>
+        </div>
+        <div class="log-box" id="log-box"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ============================ 源编辑弹窗 ============================ -->
+<div class="modal fade" id="modal-source" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modal-source-title">添加动漫源</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <ul class="nav nav-tabs mb-3" role="tablist">
+          <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-basic" type="button">基本信息</button></li>
+          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-search" type="button">检索规则</button></li>
+          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-episodes" type="button">剧集规则</button></li>
+          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-video" type="button">视频地址</button></li>
+          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-advanced" type="button">高级 / JSON</button></li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane fade show active" id="tab-basic">
+            <div class="hint-box mb-3">
+              <b>MacCMS 资源站接口</b>：只需填一个接口地址即可检索并直接拿到 m3u8，最省事。
+            </div>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">源名称</label>
+                <input class="form-control" id="src-name" placeholder="例如：某某资源">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">源类型</label>
+                <select class="form-select" id="src-type"></select>
+                <div class="form-text" id="src-type-desc"></div>
+              </div>
+              <div class="col-12">
+                <label class="form-label">站点网址 / 接口地址</label>
+                <input class="form-control" id="src-base" placeholder="https://example.com 或 https://api.example.com/api.php/provide/vod/">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">MacCMS 主接口</label>
+                <input class="form-control" id="src-api" placeholder="https://api.example.com/api.php/provide/vod/">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">备用接口（JSON 数组，可留空）</label>
+                <input class="form-control" id="src-apis" placeholder='[{"name":"备用","api":"https://..."}]'>
+              </div>
+              <div class="col-12">
+                <label class="form-label">备注</label>
+                <input class="form-control" id="src-note" placeholder="可选">
+              </div>
+              <div class="col-12">
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" id="src-enabled" checked>
+                  <label class="form-check-label" for="src-enabled">启用（参与检索）</label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="tab-pane fade" id="tab-search">
+            <div class="hint-box mb-3">
+              选择器语法：<code>CSS选择器</code> 取文本、<code>选择器@属性</code> 取属性、
+              <code>选择器@href|re:正则</code> 二次提取，另支持 <code>re:正则</code>、<code>json:路径</code>。
+            </div>
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label">检索地址模式</label>
+                <select class="form-select" id="sr-mode">
+                  <option value="query">查询参数（/search?wd=关键字）</option>
+                  <option value="path">路径拼接（/search/关键字）</option>
+                  <option value="template">完整模板（含 {keyword} {page}）</option>
+                </select>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">路径 / 模板</label>
+                <input class="form-control" id="sr-path" placeholder="/search 或 /search/{keyword}">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">查询参数名</label>
+                <input class="form-control" id="sr-param" placeholder="wd">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">请求方法</label>
+                <select class="form-select" id="sr-method">
+                  <option value="GET">GET</option>
+                  <option value="POST">POST</option>
+                </select>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">抓取页数</label>
+                <input class="form-control" id="sr-pages" type="number" min="1" max="5" value="1">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">分页参数名</label>
+                <input class="form-control" id="sr-pageparam" placeholder="page">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">结果地址正则过滤</label>
+                <input class="form-control" id="sr-urlpattern" placeholder="/detail/\\d+">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">结果条目选择器</label>
+                <input class="form-control" id="sr-item" placeholder="div.anime-item">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">详情页链接</label>
+                <input class="form-control" id="sr-url" placeholder="h3 a@href">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">动漫名称</label>
+                <input class="form-control" id="sr-name" placeholder="h3 a">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">封面图</label>
+                <input class="form-control" id="sr-cover" placeholder="img@data-src">
+              </div>
+              <div class="col-12">
+                <label class="form-label">更新信息（可选）</label>
+                <input class="form-control" id="sr-update" placeholder="span.update">
+              </div>
+            </div>
+          </div>
+
+          <div class="tab-pane fade" id="tab-episodes">
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">剧集条目选择器</label>
+                <input class="form-control" id="ep-item" placeholder="ul.episode-list li a">
+                <div class="form-text">留空则用“链接正则”在详情页里直接找</div>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">剧集链接</label>
+                <input class="form-control" id="ep-url" placeholder="@href">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">剧集名称</label>
+                <input class="form-control" id="ep-name" placeholder="@title（留空取链接文本）">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">链接正则（提取集数）</label>
+                <input class="form-control" id="ep-regex" placeholder="/play/(\\d+)/">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">链接基准地址（可选）</label>
+                <input class="form-control" id="ep-urlbase" placeholder="http://player.example.com">
+              </div>
+              <div class="col-md-6 d-flex align-items-end">
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" id="ep-reverse">
+                  <label class="form-check-label" for="ep-reverse">站点剧集为倒序，抓取后反转</label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="tab-pane fade" id="tab-video">
+            <div class="hint-box mb-3">
+              浏览器 F12 → Network 过滤 <code>m3u8</code>，把出现地址的那段文本写成正则填进来（需含捕获组）。
+            </div>
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label">解析方式</label>
+                <select class="form-select" id="vd-type">
+                  <option value="auto">自动（抓取播放页）</option>
+                  <option value="direct">剧集地址即视频地址</option>
+                </select>
+              </div>
+              <div class="col-md-8">
+                <label class="form-label">播放页请求头（可选，JSON）</label>
+                <input class="form-control" id="vd-headers" placeholder='{"Referer": "{episode_url}"}'>
+              </div>
+              <div class="col-12">
+                <label class="form-label">视频地址正则（一行一条，按顺序尝试）</label>
+                <textarea class="form-control" id="vd-patterns" rows="5"
+                  placeholder='"url"\s*:\s*"(https?://[^"]+\.m3u8[^"]*)"&#10;(https?://[^"\s]+\.m3u8[^"\s]*)'></textarea>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">线路容器选择器（可选）</label>
+                <input class="form-control" id="vd-pl-item" placeholder="div.play-list a">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">线路名称</label>
+                <input class="form-control" id="vd-pl-name" placeholder="（留空取文本）">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">线路地址</label>
+                <input class="form-control" id="vd-pl-url" placeholder="@data-url">
+              </div>
+            </div>
+          </div>
+
+          <div class="tab-pane fade" id="tab-advanced">
+            <div class="row g-3">
+              <div class="col-md-4">
+                <label class="form-label">页面编码</label>
+                <input class="form-control" id="ad-encoding" placeholder="留空自动识别，如 gbk">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">请求超时（秒）</label>
+                <input class="form-control" id="ad-timeout" type="number" min="3" max="120" placeholder="20">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">测试关键字</label>
+                <input class="form-control" id="ad-keyword" placeholder="留空则用「动画」">
+              </div>
+              <div class="col-12">
+                <label class="form-label">自定义请求头（JSON）</label>
+                <input class="form-control" id="ad-headers" placeholder='{"Referer": "https://example.com"}'>
+              </div>
+              <div class="col-12">
+                <label class="form-label">完整配置 JSON（保存时以此为准）</label>
+                <textarea class="code-area" id="ad-json" spellcheck="false"></textarea>
+                <div class="d-flex gap-2 mt-2">
+                  <button class="btn btn-outline-light btn-sm" id="btn-src-json-format"><i class="bi bi-braces"></i> 格式化</button>
+                  <button class="btn btn-outline-light btn-sm" id="btn-src-json-apply"><i class="bi bi-arrow-up-square"></i> 用 JSON 覆盖表单</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <hr class="my-3">
+        <div class="d-flex gap-2 flex-wrap align-items-center">
+          <button class="btn btn-outline-light btn-sm" id="btn-src-test"><i class="bi bi-play-circle"></i> 测试源</button>
+          <button class="btn btn-outline-light btn-sm" id="btn-src-test-episodes"><i class="bi bi-list-ol"></i> 测试剧集</button>
+          <button class="btn btn-outline-light btn-sm" id="btn-src-test-video"><i class="bi bi-camera-video"></i> 测试视频地址</button>
+          <span class="text-dim" id="src-test-hint" style="font-size:11.5px">使用当前表单内容测试，无需先保存</span>
+        </div>
+        <pre class="mt-3 mb-0 p-3" id="src-test-output"
+             style="display:none;background:var(--panel-2);border:1px solid var(--line);border-radius:6px;max-height:260px;overflow:auto;font-size:11.5px"></pre>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-light btn-sm" data-bs-dismiss="modal">取消</button>
+        <button class="btn btn-primary btn-sm" id="btn-source-save"><i class="bi bi-check2"></i> 保存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ 文件夹选择 ============================ -->
+<div class="modal fade" id="modal-folder" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">选择下载目录</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="dir-picker mb-2">
+          <input class="form-control" id="folder-path" placeholder="目录路径">
+          <button class="btn btn-outline-light btn-sm" id="btn-folder-go">前往</button>
+          <button class="btn btn-outline-light btn-sm" id="btn-folder-up"><i class="bi bi-arrow-up"></i></button>
+        </div>
+        <div id="folder-list" style="max-height:330px;overflow:auto;border:1px solid var(--line);border-radius:6px"></div>
+        <div class="text-dim mono mt-2" id="folder-info" style="font-size:11.5px"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-light btn-sm" data-bs-dismiss="modal">取消</button>
+        <button class="btn btn-primary btn-sm" id="btn-folder-choose">使用此目录</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ 字幕 ============================ -->
+<div class="modal fade" id="modal-subtitle" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-badge-cc"></i> 字幕下载</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="hint-box mb-3" id="subtitle-target-info"></div>
+        <div class="d-flex gap-2 mb-3 flex-wrap">
+          <select class="form-select" id="subtitle-source" style="max-width:240px">
+            <option value="assrt">assrt.net（中文动漫字幕）</option>
+            <option value="opensub">opensubtitles（多语言）</option>
+          </select>
+          <input class="form-control" id="subtitle-keyword" placeholder="搜索字幕关键字（默认用番剧名）"
+                 style="flex:1;min-width:200px">
+          <button class="btn btn-primary" id="btn-subtitle-search"><i class="bi bi-search"></i> 搜索</button>
+        </div>
+        <div class="text-dim mb-2" style="font-size:11.5px">
+          assrt 适合中文动漫（常见整季 rar 包，需 7-Zip）；
+          opensubtitles 适合英文名/真人剧（简繁中文混排，自动解开 gzip）
+        </div>
+        <div id="subtitle-results" class="text-dim" style="font-size:13px">输入关键字后点击搜索</div>
+      </div>
+      <div class="modal-footer">
+        <span class="text-dim me-auto" style="font-size:12px">
+          数据源：assrt.net（射手网伪）· 字幕会保存到视频同目录，文件名与剧集一致</span>
+        <button class="btn btn-outline-light" data-bs-dismiss="modal">关闭</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ 免责声明（首次使用） ============================ -->
+<div class="modal fade" id="modal-disclaimer" tabindex="-1"
+     data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-shield-check"></i> 使用前请阅读</h5>
+      </div>
+      <div class="modal-body">
+        <div class="disclaimer-body">
+          <p class="disclaimer-lead">
+            本程序（动漫下载机 Anime Downloader）是<strong>本地运行的下载与整理工具</strong>，
+            本身<strong>不提供、不存储、不分发任何视频内容</strong>。
+          </p>
+
+          <h6><i class="bi bi-1-circle"></i> 内容来源与版权</h6>
+          <ul>
+            <li>程序仅根据你自行配置或内置的<strong>第三方站点地址</strong>抓取公开页面上的播放地址，
+                所有视频内容均由<strong>第三方站点提供</strong>，与本程序无关。</li>
+            <li>请仅下载你<strong>有权访问</strong>的内容。影视作品的著作权归其权利人所有，
+                下载、传播受版权保护的作品可能违反法律。</li>
+            <li>请支持正版。建议在合法授权的平台上观看。</li>
+          </ul>
+
+          <h6><i class="bi bi-2-circle"></i> 使用责任</h6>
+          <ul>
+            <li>你需自行确保使用行为符合<strong>所在地法律法规</strong>，
+                因使用本程序产生的一切后果由使用者自行承担。</li>
+            <li>本程序按<strong>「现状」</strong>提供，不附带任何明示或暗示的担保；
+                不对可用性、稳定性、下载内容的合法性作任何承诺。</li>
+          </ul>
+
+          <h6><i class="bi bi-3-circle"></i> 第三方站点</h6>
+          <ul>
+            <li>内置源只是<strong>示例配置</strong>，程序不对其内容、安全性、可用性负责。</li>
+            <li>第三方站点可能出现广告、诱导链接或恶意内容，请自行甄别。</li>
+            <li>若你是权利人并认为某配置侵犯了你的权益，请自行移除相应源。</li>
+          </ul>
+
+          <h6><i class="bi bi-4-circle"></i> 隐私</h6>
+          <ul>
+            <li>所有数据（配置、下载记录、日志）都保存在<strong>本机</strong>，
+                程序不上传任何信息到作者服务器。</li>
+            <li>联网请求只发往你配置的第三方站点。</li>
+          </ul>
+
+          <div class="disclaimer-foot">
+            <label class="disclaimer-check">
+              <input type="checkbox" id="disclaimer-agree">
+              <span>我已阅读并同意上述条款，并承诺仅将本程序用于合法用途。</span>
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-light btn-sm" id="btn-disclaimer-exit">不同意并退出</button>
+        <button class="btn btn-primary btn-sm" id="btn-disclaimer-accept" disabled>
+          <i class="bi bi-check2"></i> 同意并继续</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ 删除任务确认 ============================ -->
+<div class="modal fade" id="modal-delete-task" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-trash"></i> 删除下载记录</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p id="delete-task-summary" style="margin-bottom:14px"></p>
+        <label class="delete-check">
+          <input type="checkbox" id="delete-task-with-file">
+          <span>同时删除已下载的视频文件
+            <span class="text-dim" id="delete-task-file-hint"></span></span>
+        </label>
+        <div class="delete-warn" id="delete-task-warn" hidden>
+          <i class="bi bi-exclamation-triangle-fill"></i>
+          视频文件会被<b>永久删除</b>，不进回收站，无法恢复。
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-light btn-sm" data-bs-dismiss="modal">取消</button>
+        <button class="btn btn-danger btn-sm" id="btn-delete-task-confirm">
+          <i class="bi bi-trash"></i> <span id="delete-task-confirm-text">删除记录</span></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ 信息弹窗 ============================ -->
+<div class="modal fade" id="modal-info" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modal-info-title">信息</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="modal-info-body"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ 视频预览 ============================ -->
+<div class="modal fade" id="modal-player" tabindex="-1">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="local-player-title">预览</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-0">
+        <video id="player-video" controls style="width:100%;max-height:70vh;background:#000"></video>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-stack" id="toast-stack"></div>
+
+<!-- 在线预览播放器（不下载也能看；走服务端代理绕开跨域） -->
+<div class="modal fade" id="player-modal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-play-circle"></i>
+          <span id="player-title">在线预览</span></h5>
+        <span class="badge badge-dim" id="player-source"></span>
+        <div class="spacer" style="flex:1"></div>
+        <button class="btn btn-outline-light btn-sm me-2" id="btn-player-reload"
+                title="重新解析并加载这一集"><i class="bi bi-arrow-clockwise"></i></button>
+        <button class="btn btn-outline-light btn-sm me-2" id="btn-player-copy-url"
+                title="复制视频直链"><i class="bi bi-link-45deg"></i></button>
+        <button class="btn btn-outline-light btn-sm me-2" id="btn-player-download"
+                title="把这一集加入下载队列"><i class="bi bi-download"></i></button>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="player-wrap">
+          <video id="preview-video" controls playsinline preload="metadata"></video>
+          <div class="player-mask" id="player-mask">
+            <span class="spinner-border spinner-border-sm"></span>
+            <div class="mt-2" id="player-mask-text">正在解析播放地址…</div>
+          </div>
+        </div>
+        <div class="player-info" id="player-info"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  window.__jsErrors = [];
+  window.addEventListener('error', (e) => window.__jsErrors.push(String(e.message)));
+  window.addEventListener('unhandledrejection', (e) => window.__jsErrors.push('promise: ' + String(e.reason)));
+</script>
+<script src="/static/vendor/bootstrap.bundle.min.js"></script>
+<script src="/static/vendor/socket.io.min.js?v={{ version }}"></script>
+<script src="/static/vendor/Sortable.min.js?v={{ version }}"></script>
+<script src="/static/vendor/hls.min.js?v={{ version }}"></script>
+<script src="/static/js/util.js?v={{ version }}"></script>
+<script src="/static/js/views.js?v={{ version }}"></script>
+<!-- 主逻辑按职责拆分（普通脚本，共享全局作用域；顺序 = 依赖顺序） -->
+<script src="/static/js/app/boot.js?v={{ version }}"></script>
+<script src="/static/js/app/appearance.js?v={{ version }}"></script>
+<script src="/static/js/app/settings.js?v={{ version }}"></script>
+<script src="/static/js/app/sources.js?v={{ version }}"></script>
+<script src="/static/js/app/search.js?v={{ version }}"></script>
+<script src="/static/js/app/player.js?v={{ version }}"></script>
+<script src="/static/js/app/subtitles.js?v={{ version }}"></script>
+<script src="/static/js/app/tasks.js?v={{ version }}"></script>
+<script src="/static/js/app/events.js?v={{ version }}"></script>
+<script src="/static/js/app/main.js?v={{ version }}"></script>
+</body>
+</html>

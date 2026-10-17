@@ -1,0 +1,20 @@
+# 动漫下载机 Anime Downloader 运行依赖
+# 本地安装： .venv\Scripts\python.exe -m pip install -r requirements.txt
+# Docker 构建时会自动执行这一步
+
+Flask>=3.0
+Flask-SocketIO>=5.3
+simple-websocket>=1.0
+requests>=2.31
+beautifulsoup4>=4.12
+lxml>=5.0
+m3u8>=4.0
+pycryptodome>=3.20
+tqdm>=4.66
+
+# 「文字广告体检」用的画面 OCR（识别片头/片中烧进画面的字幕广告）。
+# rapidocr-onnxruntime 自带中文模型，纯 Python 推理，不用另外下模型，
+# 也不依赖系统 OCR 或桌面会话。会带入 numpy/opencv-python/onnxruntime/Pillow。
+# 不需要这个功能可以注释掉——检测时会明确报「画面 OCR 不可用」，
+# 而不是静默地把所有源都判成「没广告」。
+rapidocr-onnxruntime>=1.3
