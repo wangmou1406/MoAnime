@@ -80,3 +80,15 @@ backend\动漫下载机.exe ← Python/Flask 后端：全部业务逻辑
 * Windows 10 / 11（64 位）
 * WebView2 运行时（Win10 1803+ 一般预装；被精简过的系统需单独装：
   <https://developer.microsoft.com/microsoft-edge/webview2/>）
+
+---
+
+## 平台与下载位置
+
+**支持：仅 Windows 10/11（64 位）**（依赖系统 WebView2 运行时）
+
+| 内容 | 位置 |
+| --- | --- |
+| 下载的视频 | `%USERPROFILE%\Downloads\AnimeDownloader`（首次默认，之后在界面改） |
+| 临时分片 | `<下载目录>\.tmp\` |
+| 数据（库/设置/日志） | `%LOCALAPPDATA%\AnimeDownloader\data` |

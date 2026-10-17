@@ -141,6 +141,56 @@ MoAnime/
 > 三版**共用一份源码**，只是启动方式和打包方式不同；这样修 bug 不用改三遍。
 > 各文件夹里都有自己的 `README.md` 详细说明。
 
+### 平台兼容性
+
+| 版本 | Windows | Linux | macOS | 说明 |
+| --- | :---: | :---: | :---: | --- |
+| **`python/`**（源码跑） | ✅ | ✅ | ⚠️ | 需要自己装 Python ≥ 3.10；macOS 未实测 |
+| **`docker/`** | — | ✅ | — | 镜像是 linux/amd64；Windows/macOS 通过 Docker Desktop 也能跑 |
+| **`desktop/`**（exe） | ✅ | ❌ | ❌ | 依赖 Windows 的 WebView2 运行时 |
+
+**`.py` 版在 Linux 上实测过**（`python:3.12-slim` 容器）：
+
+```
+Python 3.12.15 / Linux
+依赖安装完成 → 服务 2 秒就绪 → 首页 HTTP 200（47 KB）
+检索「海贼」→ 命中 20 条 → 解析 1180 集 → 下载进度 0 → 10.6%
+分片落在 /app/downloads/.tmp/海贼王_第01集/  清晰度 1080x608
+```
+
+Linux 上还需要两个**系统依赖**（不是 pip 包）：
+
+```bash
+sudo apt install ffmpeg fonts-noto-cjk     # Debian/Ubuntu（含 WSL）
+sudo dnf install ffmpeg google-noto-sans-cjk-fonts   # Fedora
+```
+
+* **没有 ffmpeg**：m3u8 → mp4 会退化成 `.ts` 分段合并（程序会在界面里提示）
+* **没有中文字体**：文字广告体检会明确报
+  「没找到可用字体，无法生成测试图」—— 不做静默假阴性
+
+> 浏览器取流（`data/_pwt`）只有 Windows 那份内核；
+> Linux 上的 `.py` 版会自动退化成纯 HTTP 取流。**Docker 版不受影响**（镜像里自带 Linux 内核）。
+
+### 三个版本的下载位置
+
+| 版本 | 默认下载位置 | 临时目录 | 怎么改 |
+| --- | --- | --- | --- |
+| **`python/`** | `<项目根>/downloads/` | `<下载目录>/.tmp/` | 界面【设置 → 下载位置】，或 `AD_DOWNLOAD_DIR` |
+| **`docker/`** | 容器内 `/downloads/`（挂载到宿主机） | `/downloads/.tmp/` | `AD_DOWNLOAD_HOST` / `AD_IN_DOWNLOAD`（见 `.env.example`） |
+| **`desktop/`** | `%USERPROFILE%\Downloads\AnimeDownloader` | 同上 `.tmp` 规则 | 界面【设置 → 下载位置】 |
+
+临时目录**永远跟随下载目录**（`<下载目录>/.tmp`），所以只需要改一处。
+容器里刻意不设 `AD_TEMP_DIR`，否则这条跟随逻辑会失效（踩过）。
+
+数据库/设置/日志的位置各不相同：
+
+| 版本 | 数据目录 |
+| --- | --- |
+| `python/` | `<项目根>/data/` |
+| `docker/` | 容器内 `/data/`（挂载到宿主机的 `docker-data/`） |
+| `desktop/` | `%LOCALAPPDATA%\AnimeDownloader\data`（程序目录只读也不影响） |
+
 ### 桌面版（普通用户推荐）
 
 ```powershell

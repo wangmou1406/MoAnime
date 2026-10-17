@@ -36,6 +36,50 @@ internal static class Program
     {
         ApplicationConfiguration.Initialize();
 
+        // ------------------------------------------------------------ 单实例保护
+        // 双击已经开着的程序时，如果放任它起第二个实例：
+        //   · 两个进程连同一个 SQLite，任务会被重复执行；
+        //   · 抢同一个日志文件，直接报
+        //     "The process cannot access the file ...backend.log"（实际踩过）。
+        // 所以这里用命名互斥体拦住。用 Local\ 而不是 Global\：
+        // 同一台机器上不同用户各自可以开一个，互不干扰。
+        var mutexName = @"Local\AnimeDownloader.SingleInstance";
+        Mutex? instanceMutex = null;
+        bool isFirstInstance = true;
+        try
+        {
+            instanceMutex = new Mutex(initiallyOwned: true, mutexName, out isFirstInstance);
+        }
+        catch
+        {
+            // 互斥体都建不出来就别拦了，正常启动
+            isFirstInstance = true;
+        }
+
+        if (!isFirstInstance)
+        {
+            MessageBox.Show(
+                "动漫下载机已经在运行了。\n\n"
+                + "请到任务栏单击「动漫下载机」窗口；如果要重新启动，\n"
+                + "先关掉现有窗口（或结束「AnimeDownloader.exe」进程）再试。",
+                WindowTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            instanceMutex?.Dispose();
+            return 0;
+        }
+
+        try
+        {
+            return RunApp();
+        }
+        finally
+        {
+            try { instanceMutex?.ReleaseMutex(); } catch { /* 非持有者释放会抛，忽略 */ }
+            instanceMutex?.Dispose();
+        }
+    }
+
+    private static int RunApp()
+    {
         var backend = ResolveBackend();
         if (backend is null)
         {
@@ -44,7 +88,10 @@ internal static class Program
         }
 
         var port = FindFreePort();
-        var stdoutLog = Path.Combine(LogDir, "backend.log");
+        // 日志按端口命名：两个实例同时跑时不会抢同一个文件（曾经因此
+        // "The process cannot access the file ...backend.log because it is
+        // being used by another process" 直接启动失败）。
+        var stdoutLog = Path.Combine(LogDir, $"backend-{port}.log");
         Process? proc;
         try
         {
@@ -52,7 +99,7 @@ internal static class Program
             HostLog($"后端: {backend}");
             HostLog($"端口: {port}");
             HostLog($"日志: {stdoutLog}");
-            // 每次启动前清空后端日志，避免历史内容干扰排查（真正的 app.log 有轮转）
+            // 每次启动前清空本轮日志，避免历史内容干扰排查（真正的 app.log 有轮转）
             try { File.Delete(stdoutLog); } catch { /* 正被占用就算了 */ }
             proc = StartBackend(backend, port, stdoutLog);
             HostLog($"后端已启动 PID={proc.Id}");
@@ -242,10 +289,26 @@ internal static class Program
         // 把后端输出落到日志文件。
         // 不重定向的话，后端（console=False 打包）的输出就彻底丢了 ——
         // 出问题时只能看到一个"打不开"的窗口，完全没法排查。
-        var writer = new StreamWriter(logFile, append: true, Encoding.UTF8) { AutoFlush = true };
+        //
+        // 共享模式必须显式给 FileShare.ReadWrite：
+        // StreamWriter(path, append) 默认只允许别的进程「读」，一旦另一个实例
+        // 或上一轮残留还开着这个文件，构造就会抛
+        // "being used by another process"。这里放宽共享，写失败也不致命。
+        StreamWriter? writer = null;
+        try
+        {
+            var fs = new FileStream(logFile, FileMode.Append, FileAccess.Write,
+                                    FileShare.ReadWrite | FileShare.Delete);
+            writer = new StreamWriter(fs, Encoding.UTF8) { AutoFlush = true };
+        }
+        catch
+        {
+            // 日志打不开不能拦住程序启动
+        }
+
         void Pump(string? line)
         {
-            if (line is null) return;
+            if (line is null || writer is null) return;
             try { writer.WriteLine(line); } catch { /* 关窗阶段的写入失败忽略 */ }
         }
         proc.OutputDataReceived += (_, e) => Pump(e.Data);
@@ -334,6 +397,35 @@ internal sealed class MainForm : Form
         _webView.Dock = DockStyle.Fill;
         Controls.Add(_webView);
         Load += OnLoad;
+    }
+
+    /// <summary>
+    /// 兜底：万一窗口落在所有屏幕之外，把它拉回主屏。
+    ///
+    /// WinForms 的 CenterScreen 会按"当前活动屏"居中（实测多显示器下它选了
+    /// 坐标 X=-1920 的副屏 —— 对用户没问题，窗口就在他看的那个屏上）。
+    /// 但如果显示器数量/布局变过（拔掉副屏、改分辨率、远程桌面），窗口可能
+    /// 整个跑到虚拟桌面之外，用户只会以为"程序没打开"。
+    /// 这里只在这种情况下纠正，正常情况绝不动窗口位置。
+    /// </summary>
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        try
+        {
+            if (Screen.AllScreens.Any(s => s.WorkingArea.IntersectsWith(Bounds)))
+                return;
+
+            var area = Screen.PrimaryScreen?.WorkingArea
+                       ?? Screen.AllScreens[0].WorkingArea;
+            Location = new Point(
+                area.Left + Math.Max(0, (area.Width - Width) / 2),
+                area.Top + Math.Max(0, (area.Height - Height) / 2));
+        }
+        catch
+        {
+            // 位置纠正失败不影响使用
+        }
     }
 
     /// <summary>

@@ -87,3 +87,21 @@ docker run -d --name anime -p 8848:8848 \
   --shm-size 1gb --restart unless-stopped \
   anime-downloader:latest
 ```
+
+---
+
+## 平台与下载位置
+
+**支持：Linux**（镜像 linux/amd64；Windows / macOS 通过 Docker Desktop 也能跑）
+
+| 内容 | 容器内路径 | 宿主机默认位置 | 怎么改 |
+| --- | --- | --- | --- |
+| 下载的视频 | `/downloads/` | `<项目根>/downloads/` | `AD_DOWNLOAD_HOST` |
+| 临时分片 | `/downloads/.tmp/` | 同上 | 跟随下载目录，别单独设 `AD_TEMP_DIR` |
+| 数据（库/设置/日志） | `/data/` | `<项目根>/docker-data/` | `AD_DATA_HOST` |
+
+```bash
+cp .env.example .env
+# 编辑 .env：AD_DOWNLOAD_HOST=/volume1/video/anime
+docker compose up -d
+```

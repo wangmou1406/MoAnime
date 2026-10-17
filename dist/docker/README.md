@@ -74,3 +74,15 @@ Get-FileHash anime-downloader-3.1.0.tar -Algorithm SHA256   # Windows
 * 默认端口 **8848**；和本地 Python 版同时跑时要改，见 `.env.example` 里的 `AD_HOST_PORT`。
 * `--shm-size 1gb`：Chromium 在容器里需要足够的 `/dev/shm`，不然可能启动失败。
 * 只测过 **linux/amd64**；ARM（如树莓派、M 系列 Mac）需要另行验证。
+
+---
+
+## 平台与下载位置
+
+**支持：Linux**（镜像 linux/amd64）
+
+| 内容 | 容器内 | 宿主机（你挂的） |
+| --- | --- | --- |
+| 下载的视频 | `/downloads/` | `-v 你的路径:/downloads` |
+| 临时分片 | `/downloads/.tmp/` | 同上（自动跟随） |
+| 数据 | `/data/` | `-v 你的路径:/data` |

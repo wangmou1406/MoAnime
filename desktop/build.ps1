@@ -121,6 +121,23 @@ Write-Host ("    合计：{0:N0} MB" -f ($size / 1MB))
 
 # ---------------------------------------------------------------- 3) 安装包
 Write-Step "3/3 制作安装包（NSIS）"
+
+# 打包前清掉运行期产物：这些是程序跑起来才生成的，
+# 不该进安装包（会把开发机上的配置/日志带给别人）。
+# installer.nsi 里也做了 /x 排除，这里是双保险 —— 顺便避免
+# 「SQLite 正被运行中的程序占用，NSIS 读不了」导致构建失败（实测踩过）。
+foreach ($junk in @('data', 'webview2')) {
+    $p = Join-Path $AppRoot $junk
+    if (Test-Path -LiteralPath $p) {
+        try {
+            Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction Stop
+            Write-Host "    已清理运行期目录：$junk"
+        } catch {
+            Write-Host "    ⚠ 清不掉 $junk（程序可能还在运行），安装包会跳过它" -ForegroundColor Yellow
+        }
+    }
+}
+
 if (-not (Test-Path -LiteralPath $Makensis)) {
     throw "找不到 makensis：$Makensis`n用 -Makensis 指定路径，或下载 NSIS 便携版。"
 }

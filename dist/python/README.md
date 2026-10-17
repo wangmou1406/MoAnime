@@ -62,3 +62,18 @@ powershell -ExecutionPolicy Bypass -File python\停止.ps1
 | 需要自己开浏览器 | 是 | 是 | 否（自带窗口） |
 | 需要联网装依赖 | 首次是 | 否 | 否 |
 | 适合 | 改代码 / 调试 | NAS / 服务器 | 普通用户 |
+
+---
+
+## 平台与下载位置
+
+**支持：Windows ✅ · Linux ✅ · macOS ⚠️（未实测）**
+
+| 内容 | 位置 |
+| --- | --- |
+| 下载的视频 | `<解压目录>/downloads/` |
+| 临时分片 | `<下载目录>/.tmp/` |
+| 数据（库/设置/日志） | `<解压目录>/data/` |
+
+Linux 上还需 `sudo apt install ffmpeg fonts-noto-cjk`，
+否则转封装会退化、文字广告体检会明确报"没有可用字体"。

@@ -59,3 +59,8 @@ data/webview2/
 !dist/**/README.md
 data/_pyi/
 data/_setup.*
+data/_build_*.log
+desktop/webview2-host/publish/
+
+# data/ 下所有以 _ 开头的一律是构建/运行临时产物（_pwt 内核、_pyi 工作目录、_xxx.log 等）
+data/_*
