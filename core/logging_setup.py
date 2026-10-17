@@ -72,8 +72,55 @@ def recent_logs(limit: int = 300, after_id: int = 0, level: str = None):
 
 
 def clear_logs() -> None:
+    """清空日志：**内存环形缓冲 + 磁盘文件**。
+
+    只清内存是不够的。恢复出厂设置（factory-reset）要清日志的目的写在
+    那条调用的注释里：「免得里面还留着旧的关键字」—— 可是内存清了、
+    app.log 里的历史内容还在，还带着 app.log.1/.2/.3 三个轮转备份，
+    等于没清干净（实测踩过）。
+
+    磁盘这边不能直接删文件：RotatingFileHandler 正开着它，
+    Windows 上删除会失败。所以走「截断已打开的流」这条路。
+    """
     with _RING_LOCK:
         _RING.clear()
+
+    # 截断所有文件 handler 的流（console handler 没有 stream 属性，自动跳过）
+    targets = []
+    for name in ("moanime", ""):
+        targets.append(logging.getLogger(name))
+    seen = set()
+    for logger_obj in targets:
+        for handler in list(logger_obj.handlers):
+            if id(handler) in seen:
+                continue
+            seen.add(id(handler))
+            stream = getattr(handler, "stream", None)
+            if stream is None or not hasattr(stream, "truncate"):
+                continue
+            try:
+                handler.acquire()
+                try:
+                    stream.seek(0)
+                    stream.truncate(0)
+                finally:
+                    handler.release()
+            except Exception:  # noqa: BLE001  单个 handler 失败不影响其它
+                pass
+
+    # 顺手删掉轮转备份（app.log.1 / .2 / .3），否则旧内容还能翻出来
+    try:
+        log_dir = os.path.dirname(LOG_FILE)
+        base = os.path.basename(LOG_FILE)
+        if os.path.isdir(log_dir):
+            for name in os.listdir(log_dir):
+                if name.startswith(base + ".") and name != base:
+                    try:
+                        os.remove(os.path.join(log_dir, name))
+                    except OSError:
+                        pass
+    except Exception:  # noqa: BLE001
+        pass
 
 
 _configured = False
