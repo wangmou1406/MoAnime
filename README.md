@@ -1,82 +1,110 @@
 # 动漫下载机 · Anime Downloader
 
+[![CI](https://github.com/USER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/USER/REPO/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab?logo=python&logoColor=white)](https://www.python.org/)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20Docker-6b7280)](#平台兼容性)
+[![Version](https://img.shields.io/badge/Version-3.1.0-22c55e)](CHANGELOG.md)
+
+<!-- ============================================================
+     发布前请把下面两处 USER/REPO 改成你的 GitHub 用户名和仓库名，
+     否则 CI 徽章是坏的（会显示 unknown）。
+     例：github.com/yourname/anime-downloader
+     ============================================================ -->
+
+> A self-hosted anime **search & download** client with a web UI.
+> Multiple pluggable sources, HLS → MP4 remux, subtitle fetching,
+> and two-channel ad detection (duration + on-screen text OCR).
+>
+> Three deliverables sharing one codebase: **Docker**, **Python** (Windows/Linux),
+> and a **Windows desktop app** built on the system WebView2 (no bundled browser).
+
 Python + Flask 重写的动漫下载软件（Web 界面），参考了
 [XiaoMoAnime](https://github.com/196632094/XiaoMoAnime) 的使用方式，
 但整体架构重做：**所有动漫源都可以在网页上添加、拖拽排序、勾选启用**，不需要改代码。
-**首次启动即内置 14 个实测可用的动漫源，装好就能直接搜、直接下。**
+**首次启动即内置 13 个实测可用的动漫源，装好就能直接搜、直接下。**
+
+> ⚠️ **本项目不提供、不托管、不分发任何影视内容。** 详见 [免责声明](#免责声明)。
+> 仅用于学习与研究，请遵守你所在地区的法律和你访问的站点的服务条款。
+
+## 目录
+
+| 文档 | 内容 |
+| --- | --- |
+| [快速开始](#二快速开始) | 三个版本各自怎么装、怎么跑 |
+| [平台兼容性](#平台兼容性) | Windows / Linux / Docker 各支持什么 |
+| [下载位置](#三个版本的下载位置) | 三个版本的文件分别落在哪 |
+| [功能](#一内置动漫源开箱可用) | 源管理、检索、下载、字幕、广告体检、外观 |
+| [API](#五api-一览前端与第三方都可调用) | REST 接口一览 |
+| [贡献](CONTRIBUTING.md) | 怎么提 Issue / PR、怎么加一个源 |
+| [更新日志](CHANGELOG.md) | 版本变更 |
+| [安全策略](SECURITY.md) · [行为准则](CODE_OF_CONDUCT.md) | — |
+| [许可证](LICENSE) | MIT |
+
+---
+
+## 仓库结构
 
 ```
-软件/MoAnime
-├── run.py                   启动入口
-├── 启动.bat                 一键启动（双击即可，前台运行）
-├── launcher.ps1             启动器（自动找 Python / 建环境 / 装依赖 / 已在跑就不重复启动）
-├── 后台启动.ps1             后台常驻启动（关掉窗口也继续跑）
-├── 停止.ps1                 按端口停止服务（会先确认是本程序）
-├── requirements.txt
-├── source/core/                    核心层
-│   ├── config.py            全局设置（settings.json 持久化）
-│   ├── database.py          SQLite 持久层（动漫源 / 任务 / 历史 / 检索历史）
-│   ├── download_engine.py   HLS 分片 + 直链下载引擎（可暂停/继续/取消）
-│   ├── task_manager.py      任务队列、并发调度、进度广播
-│   ├── naming.py            命名规则（简洁 / Jellyfin / Emby / Plex / 飞牛）
-│   ├── selector.py          CSS 选择器 / 正则 / JSON 路径 抽取引擎
-│   ├── logging_setup.py     控制台 + 文件 + 内存环形缓冲日志
-│   └── utils.py             URL 处理、文件名清洗、会话构建等
-├── sources/                 动漫源插件
-│   ├── maccms.py            ★ MacCMS 资源站接口源（内置源都走这里）
-│   ├── generic.py           通用可配置源（CSS 选择器 / 正则 / JSON 路径）
-│   ├── jsonapi.py           JSON 接口源
-│   ├── jsonfeed.py          JSON 订阅源（分享用）
-│   ├── seed_sources.py      内置源清单 + 幂等补齐逻辑
-│   ├── auto_detect.py       自动探测站点并生成源配置草稿
-│   ├── base.py              插件基类与类型注册表
-│   └── manager.py           源管理 + 聚合检索（按优先级并发）
-├── web/                     Web 层
-│   ├── app.py               Flask + Socket.IO 装配
-│   ├── routes/              全部 REST API（按职责分文件，共用一个 api 蓝图）
-│   │   ├── __init__.py      包入口（按原顺序 import，保证路由注册次序）
-│   │   ├── _base.py         蓝图、ok/fail/body、通用参数校验
-│   │   ├── meta.py          元信息与文件系统
-│   │   ├── search.py        检索、剧集、地址解析
-│   │   ├── downloads.py     下载任务
-│   │   ├── appearance.py    自定义背景
-│   │   ├── sources.py       源管理
-│   │   ├── settings.py      设置与维护
-│   │   ├── library.py       番剧库、字幕、播放流
-│   │   ├── ads.py           广告体检
-│   │   └── system.py        日志、统计、ffmpeg、浏览器取流
-│   └── routes_api.py        兼容层（仅 re-export，旧代码 import 仍可用）
-├── templates/index.html     单页界面
-├── static/css/app.css       界面样式（「深夜档放映单」视觉方向）
-├── static/js/
-│   ├── util.js              通用工具：DOM、请求、提示、格式化、作业面板
-│   ├── views.js             视图渲染：结果列表 / 源列表 / 任务队列
-│   └── app/                 主逻辑（普通脚本，共享全局作用域，按职责拆分）
-│       ├── boot.js          全局 state、boot()、视图切换、Socket
-│       ├── appearance.js    主题 / 配色 / 背景 / 动效
-│       ├── settings.js      设置、统计、日志、浏览器取流、恢复出厂
-│       ├── sources.js       源管理（列表、排序、测活、表单、导入导出）
-│       ├── search.js        检索与剧集面板
-│       ├── player.js        播放器（在线 / 本地、hls.js）
-│       ├── subtitles.js     字幕搜索与下载
-│       ├── tasks.js         下载任务与广告体检
-│       ├── events.js        全局事件绑定（带目录注释）
-│       └── main.js          入口：把 boot() 挂到 DOMContentLoaded
-├── static/vendor/           本地化的 Bootstrap / 图标 / Sortable / Socket.IO
-├── source/tools/                   辅助脚本（自检、单测、依赖下载、缓存自检）
-├── python/data/                    SQLite 数据库与 settings.json
-├── python/data/_pwt/               内置浏览器内核 + 内置 Node + playwright-core（约 525 MB）
-├── dist/                    Docker 镜像归档（docker save 产物，不进版本库）
-├── python/downloads/               默认下载目录
-└── logs/app.log             运行日志
+MoAnime/
+├── source/                     共享源码（唯一真源，三个版本共用）
+│   ├── run.py                  启动入口
+│   ├── requirements.txt
+│   ├── core/                   核心层
+│   │   ├── config.py           设置（settings.json 持久化）+ 可写目录回退
+│   │   ├── database.py         SQLite（源 / 任务 / 历史 / 检索历史）
+│   │   ├── download_engine.py  HLS 分片 + 直链下载（暂停/继续/取消，断点续传）
+│   │   ├── task_manager.py     队列、并发调度、进度广播
+│   │   ├── naming.py           命名规则（简洁 / Jellyfin / Emby / Plex / 飞牛）
+│   │   ├── selector.py         CSS 选择器 / 正则 / JSON 路径抽取
+│   │   ├── subtitle.py         字幕搜索与下载（assrt / opensubtitles…）
+│   │   ├── browser.py          打开浏览器（三平台）
+│   │   ├── browser_resolver.py 浏览器取流（Playwright + Node）
+│   │   └── logging_setup.py    日志（控制台 + 轮转文件 + 内存环形缓冲）
+│   ├── sources/                动漫源插件（@register 注册）
+│   │   ├── maccms.py           ★ MacCMS 资源站接口（内置源都走这里）
+│   │   ├── generic.py          通用可配置源（选择器 / 正则）
+│   │   ├── jsonapi.py          JSON 接口源
+│   │   ├── jsonfeed.py         JSON 订阅源（分享用）
+│   │   ├── anime1.py           台湾动画站（需浏览器取流）
+│   │   ├── auto_detect.py      探测站点并生成源配置草稿
+│   │   └── manager.py          源管理 + 聚合检索（按优先级并发）
+│   ├── web/
+│   │   ├── app.py              Flask + Socket.IO 装配
+│   │   └── routes/             REST API（按职责分文件，共用一个 api 蓝图）
+│   ├── static/                 前端（Bootstrap / hls.js / Sortable 均已本地化）
+│   │   ├── css/app.css
+│   │   └── js/{util,views}.js + js/app/*.js
+│   ├── templates/index.html    单页界面
+│   └── tools/                  自检 / 单测 / 依赖下载
+│       ├── ffmpeg.exe          （Windows 用，不进版本库）
+│       └── player_sniffer.js   浏览器取流的 Node 脚本
+│
+├── python/                     Python 版（运行根）
+│   ├── 启动.bat · launcher.ps1 · 后台启动.ps1 · 停止.ps1   （Windows）
+│   ├── 启动.sh · 停止.sh                                  （Linux / macOS）
+│   ├── .venv/ data/ logs/ downloads/                     （运行期，不进版本库）
+│   └── dist/                   便携版 zip（不进版本库）
+│
+├── docker/                     Docker 版
+│   ├── Dockerfile              镜像内自带 ffmpeg + Chromium + Node
+│   ├── docker-compose.yml · .env.example
+│   ├── docker-data/            容器 /data 挂载点（不进版本库）
+│   └── dist/                   镜像 tar（不进版本库）
+│
+└── desktop/                    Windows 桌面版
+    ├── desktop_main.py         后端入口（--headless 时只起服务）
+    ├── webview2-host/          C# 宿主（.NET 8 + Microsoft.Web.WebView2）
+    ├── app.spec                PyInstaller 配置
+    ├── installer.nsi           NSIS 安装包脚本
+    ├── make_icon.py · app.ico  图标生成与成品
+    ├── build.ps1               一键：后端 + 宿主 + 安装包
+    └── dist/                   免安装目录 + 安装包（不进版本库）
 ```
 
-> **代码组织说明**：前端主逻辑原来是一个 3000 行的 `app.js`，后端是一个 2400 行的
-> `routes_api.py`，现在都按职责拆成了多个文件。拆分是**纯搬运**（不重写逻辑），
-> 并做过字节级校验：拆完后前端逐行比对 2842 行非空内容**零差异**，后端路由表
-> 70 条**完全一致**。新增模块时，前端记得在 `templates/index.html` 底部的
-> `<script>` 列表里登记（顺序即依赖顺序），后端直接在 `web/routes/` 下新建文件
-> 并在 `__init__.py` 里 import 即可。
+> **代码只改 `source/`** —— 三个版本共用它。
+> 各版本脚本里的 `$ProjectRoot` 是运行根、`$SourceRoot` 是 `../source`，
+> 运行期数据都已在 `.gitignore` 里排除。
 
 ---
 
@@ -1317,3 +1345,38 @@ Get-NetTCPConnection -LocalPort 8848 -State Listen     # 有输出=在跑；无�
 
 如果你有**能直连的漫画站**（浏览器能打开、图片地址可直接下载），告诉我站点地址，
 我按上面的路线做出来并实测。
+
+---
+
+## 许可证
+
+[MIT License](LICENSE) © MoAnime contributors
+
+简单说：你可以自由使用、修改、分发（包括商用），但要保留版权声明，
+且作者不对使用后果负责。
+
+> 随程序附带的第三方组件各自遵循其许可：
+> Bootstrap（MIT）、bootstrap-icons（MIT）、hls.js（Apache-2.0）、
+> SortableJS（MIT）、FFmpeg（LGPL/GPL，按你取的构建而定）、
+> Chromium（BSD 系）、.NET（MIT）、WebView2（微软许可）。
+
+## 免责声明
+
+本项目是**本地下载与整理工具**，本身：
+
+* **不提供、不存储、不分发**任何视频、字幕或图片内容；
+* 不做任何转码意义上的"破解"，也不绕过付费墙或 DRM；
+* 视频全部来自**你自行配置或内置的第三方站点**，其合法性与可用性由那些站点负责；
+* 与任何资源站、动画公司、发行方**没有任何关联**，也未获其授权或认可。
+
+使用时请自行确认：
+
+1. 你所在地区关于"下载/缓存流媒体"的法律规定；
+2. 你访问的站点服务条款是否允许此类访问；
+3. 下载的内容只用于**个人观看**，不要二次分发。
+
+**本项目按"现状"提供，不对任何直接或间接损失负责。**
+如果你不接受以上条款，请不要使用。
+
+若你是版权方并认为本项目有问题，请通过
+[私密渠道](SECURITY.md) 联系；本仓库本身不含任何受版权保护的内容。

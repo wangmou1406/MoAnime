@@ -1,0 +1,76 @@
+name: Bug 报告
+description: 有东西不正常工作 —— 崩溃、下载失败、界面错乱等
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。请先确认：这是**本程序**的问题，而不是某个资源站自己挂了
+        （站点挂了下不了属于正常，可以换成别的源试试）。
+
+        ⚠️ **不要**在这里贴受版权保护的资源链接、站点 Cookie、或任何凭据。
+
+  - type: dropdown
+    id: version
+    attributes:
+      label: 用的哪个版本
+      description: 三个版本的排错方式不一样，这个信息很关键
+      options:
+        - 桌面版（安装包 / 免安装 exe）
+        - Python 版（Windows）
+        - Python 版（Linux / macOS）
+        - Docker 版
+    validations:
+      required: true
+
+  - type: input
+    id: app_version
+    attributes:
+      label: 程序版本
+      description: 界面右上角，或 `/api/meta` 里的 version
+      placeholder: "3.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: 操作系统
+      placeholder: "Windows 11 26200 / Ubuntu 24.04 / 群晖 DSM 7.2"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: 现象
+      description: 你做了什么、期望什么、实际发生了什么
+      placeholder: |
+        1. 在检索页搜「海贼」
+        2. 选了量子资源的第 1 集
+        3. 点下载
+        4. 进度到 30% 就变成「失败」
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志（强烈建议附上）
+      description: |
+        贴之前请删掉真实站点域名、Cookie、以及路径里的个人用户名。
+        * 桌面版：`%LOCALAPPDATA%\AnimeDownloader\data\logs\`（`app.log` / `crash.log` / `host.log`）
+        * Python 版：`python/logs/`、`python/data/logs/`
+        * Docker：`docker compose logs --tail=200`
+      render: text
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: 确认
+      options:
+        - label: 我已搜索过现有 Issue，没有重复
+          required: true
+        - label: 日志里不含凭据与受版权保护的资源链接
+          required: true

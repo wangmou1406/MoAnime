@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------- 测试
+  test:
+    name: 测试 (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: source/requirements.txt
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r source/requirements.txt
+          pip install flake8
+
+      - name: 语法检查（全量）
+        run: python -m compileall -q source
+
+      - name: 代码风格（只卡硬错误：未定义名字、语法、f-string 问题）
+        run: flake8 source --select=E9,F63,F7,F82 --show-source --statistics
+
+      - name: URL 拼装单元测试
+        run: python source/tools/test_urls.py
+
+      - name: XML / JSON 解析单元测试
+        run: python source/tools/test_xml.py
+
+      - name: 端到端自检（47 项，会起临时服务）
+        run: python source/tools/selftest.py
+
+      - name: 前端脚本加载检查
+        if: runner.os == 'Linux'
+        run: node source/tools/check_frontend.cjs
+
+  # ------------------------------------------------- 防止误提交大文件
+  # GitHub 单文件硬上限 100 MB，超了 push 直接被拒。
+  # 与其等推送失败，不如在 CI 里先拦下来。
+  repo-hygiene:
+    name: 仓库卫生
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 检查是否提交了运行期产物
+        run: |
+          bad=$(git ls-files | grep -Ei \
+            '(^|/)(\.venv|downloads|logs)/|(^|/)data/|_pwt|/dist/|\.tar$|\.zip$|ffmpeg(\.exe)?$' \
+            | grep -v -E 'dist/README\.md$' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::以下文件不该进版本库（运行期数据 / 二进制 / 构建产物）："
+            echo "$bad"
+            exit 1
+          fi
+          echo "✓ 没有运行期产物"
+
+      - name: 检查单文件体积（上限 20 MB）
+        run: |
+          fail=0
+          while IFS= read -r f; do
+            size=$(stat -c%s "$f" 2>/dev/null || echo 0)
+            if [ "$size" -gt 20971520 ]; then
+              echo "::error file=$f::文件 $(( size / 1048576 )) MB，超过 20 MB"
+              fail=1
+            fi
+          done < <(git ls-files)
+          exit $fail
+
+      - name: 检查有没有硬编码的凭据
+        run: |
+          if git grep -nIE \
+            '(password|passwd|secret|api[_-]?key|token)\s*[:=]\s*["'"'"'][A-Za-z0-9_\-]{16,}' \
+            -- ':!*.md' ':!*.example' ':!**/test_*' ; then
+            echo "::error::疑似硬编码凭据，请改用环境变量"
+            exit 1
+          fi
+          echo "✓ 没有发现明显凭据"
