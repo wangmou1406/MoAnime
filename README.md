@@ -149,7 +149,16 @@ powershell -ExecutionPolicy Bypass -File desktop\build.ps1
 
 产出免安装版 `dist\desktop\动漫下载机\` 和安装包 `dist\desktop\动漫下载机-3.1.0-Setup.exe`。
 安装包**按用户安装到 `%LOCALAPPDATA%\Programs`，不需要管理员权限**，自带卸载程序。
-双击后用**自带的应用窗口**打开，不用自己开浏览器。
+
+界面用 **System WebView** 方案：宿主 `AnimeDownloader.exe` 调用 **Windows 自带的
+WebView2 运行时**渲染界面，**不打包任何浏览器内核**（省掉约 540 MB）——
+和 Tauri / Wails / Neutralino 是同一个思路。业务逻辑仍在 Python 后端里，
+由宿主拉起、关窗口时一并结束。
+
+| 方案 | 打包浏览器 | 体积 |
+| --- | --- | --- |
+| 打包 Chromium（pywebview / CEF） | 是 | +540 MB |
+| **System WebView2（本项目）** | 否 | +0（用系统 WebView2） |
 
 详见 [desktop/README.md](desktop/README.md)。
 

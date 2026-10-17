@@ -46,6 +46,19 @@ def _bundle_dir() -> str:
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+def _is_writable(path: str) -> bool:
+    """目录能否创建并真正写入（只是"能创建"不算数）。"""
+    try:
+        os.makedirs(path, exist_ok=True)
+        probe = os.path.join(path, ".write-probe")
+        with open(probe, "w", encoding="utf-8") as fh:
+            fh.write("ok")
+        os.remove(probe)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def _pick_data_dir() -> str:
     """挑一个**确实能写**的数据目录。
 
@@ -94,8 +107,13 @@ def _prepare_env() -> None:
     # 「下载位置」设置，用户改了也不生效。
     settings_file = os.path.join(data_dir, "settings.json")
     if not os.path.exists(settings_file) and not os.environ.get("AD_DOWNLOAD_DIR"):
-        os.environ["AD_DOWNLOAD_DIR"] = os.path.join(
-            os.path.expanduser("~"), "Downloads", APP_NAME)
+        default_dl = os.path.join(os.path.expanduser("~"), "Downloads", APP_NAME)
+        # 先确认真能写再设。%USERPROFILE%\Downloads 在某些环境下是只读的
+        # （受控文件夹访问 / 企业 ACL / 桌面重定向到只读网络盘），
+        # 硬设会一路传到 config.download_dir() 才知道不行 —— 虽然那里现在会优雅回退，
+        # 但首次运行就冒一条告警不如干脆不设，让程序用它自己的默认值。
+        if _is_writable(default_dl):
+            os.environ["AD_DOWNLOAD_DIR"] = default_dl
 
 
 def _pick_port(host: str, preferred: int = 8848) -> int:
@@ -235,7 +253,25 @@ def _write_crash(exc_type, exc, tb) -> None:
         pass
 
 
+def _parse_args(argv=None):
+    """解析命令行。
+
+    ``--headless`` 是给 System WebView 宿主用的：只起 Web 服务、不建窗口，
+    窗口由 C# 宿主（webview2-host）提供。宿主负责杀掉本进程来退出。
+    """
+    import argparse
+    parser = argparse.ArgumentParser(
+        prog="动漫下载机", description="动漫下载机 Anime Downloader 桌面版")
+    parser.add_argument("--headless", action="store_true",
+                        help="只提供 Web 服务，不打开任何窗口（供外置 WebView 宿主使用）")
+    parser.add_argument("--port", type=int, default=None,
+                        help="指定端口（默认自动挑一个空闲端口）")
+    parser.add_argument("--host", default="127.0.0.1", help="监听地址")
+    return parser.parse_args(argv)
+
+
 def main() -> int:
+    args = _parse_args()
     _prepare_env()
 
     from core.config import VERSION, config
@@ -244,15 +280,36 @@ def main() -> int:
 
     logger = get_logger("moanime.desktop")
     logger.info("=" * 62)
-    logger.info("动漫下载机 %s 桌面版启动中...", VERSION)
+    logger.info("动漫下载机 %s 桌面版启动中...（%s）",
+                VERSION, "headless" if args.headless else "自带窗口")
 
-    host = "127.0.0.1"
-    port = _pick_port(host, int(config.get("web_port", 8848) or 8848))
-    url = "http://%s:%d" % (host, port)
+    host = args.host or "127.0.0.1"
+    if args.port:
+        port = int(args.port)
+    else:
+        port = _pick_port(host, int(config.get("web_port", 8848) or 8848))
+    url = "http://%s:%d" % ("127.0.0.1", port)
 
     app = create_app()
     init_runtime(app)
 
+    # ---------------------------------------------------------------- headless
+    # 直接把 Web 服务跑在**主线程**：外层宿主会 kill 本进程来退出，
+    # 不需要我们自己处理窗口生命周期，也少一层线程。
+    if args.headless:
+        logger.info("Web 服务：%s（headless，由宿主窗口承载）", url)
+        logger.info("数据目录：%s", os.environ.get("AD_DATA_DIR"))
+        try:
+            socketio.run(app, host=host, port=port, debug=False,
+                         allow_unsafe_werkzeug=True, use_reloader=False)
+        finally:
+            try:
+                shutdown_runtime()
+            except Exception:  # noqa: BLE001
+                pass
+        return 0
+
+    # ---------------------------------------------------------------- 自带窗口
     def serve():
         try:
             socketio.run(app, host=host, port=port, debug=False,
@@ -301,4 +358,10 @@ if __name__ == "__main__":
         raise
     except BaseException:  # noqa: BLE001
         _write_crash(*sys.exc_info())
+        if "--headless" in sys.argv:
+            # headless 是给 System WebView 宿主调用的：
+            # PyInstaller 的 windowed bootloader 会弹一个**阻塞的**错误对话框，
+            # 那样宿主就一直在等、后端进程也不退，用户只看到"打不开"。
+            # 这里直接静默退出（细节已写进 crash.log），让宿主立刻报错并收尾。
+            os._exit(1)
         raise

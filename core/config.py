@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """全局配置：路径定义与可持久化设置项。"""
 import copy
 import json
@@ -132,6 +132,9 @@ DEFAULT_SETTINGS = {
 
 _LOCK = threading.RLock()
 
+# 目录不可用时的告警去重集合（见 Config._warn_once）
+_WARNED = set()
+
 
 class Config:
     """线程安全的设置读写器（JSON 落盘）。"""
@@ -252,15 +255,59 @@ class Config:
             return copy.deepcopy(self._data)
 
     # ------------------------------------------------------------ 派生
+    def _usable_dir(self, path: str, label: str, fallback: str) -> str:
+        """确保目录存在**且可写**，不行就退到 fallback。
+
+        为什么不能只 makedirs：
+            Windows 上目录"能创建"不等于"能写" —— 只读网络盘、受控文件夹访问、
+            企业 ACL 都可能让你建好了却写不进去。更糟的是 makedirs 本身就会抛
+            PermissionError（实测：装到只读位置时 %USERPROFILE%\\Downloads 被拒），
+            而这个函数是在启动流程里被调的，一抛就把整个程序带崩。
+        所以这里做「创建 + 真实写入探测」，失败就换备用目录并告警，绝不抛。
+        """
+        candidates = [path, fallback]
+        last_error = None
+        for candidate in candidates:
+            try:
+                os.makedirs(candidate, exist_ok=True)
+                probe = os.path.join(candidate, ".write-probe")
+                with open(probe, "w", encoding="utf-8") as fh:
+                    fh.write("ok")
+                os.remove(probe)
+                if candidate != path:
+                    self._warn_once(
+                        "%s 不可用（%s），已临时改用 %s。"
+                        "请在【设置 → 下载位置】里改成一个可写的路径。"
+                        % (label, last_error, candidate))
+                return candidate
+            except Exception as exc:  # noqa: BLE001
+                last_error = exc
+                continue
+        # 连备用目录都不可写（几乎不可能），退到临时目录，仍然不抛
+        import tempfile
+        self._warn_once("%s 与备用目录都不可用，退到系统临时目录：%s" % (label, last_error))
+        return tempfile.gettempdir()
+
+    def _warn_once(self, message: str) -> None:
+        """同一条告警只打一次，避免每集下载都刷屏。"""
+        try:
+            if message in _WARNED:
+                return
+            _WARNED.add(message)
+            from .logging_setup import get_logger
+            get_logger("moanime.config").warning(message)
+        except Exception:  # noqa: BLE001
+            pass
+
     def download_dir(self) -> str:
         path = self.get("download_dir") or DEFAULT_SETTINGS["download_dir"]
-        os.makedirs(path, exist_ok=True)
-        return path
+        return self._usable_dir(path, "下载目录",
+                                os.path.join(DATA_DIR, "downloads"))
 
     def temp_dir(self) -> str:
         path = self.get("temp_dir") or DEFAULT_SETTINGS["temp_dir"]
-        os.makedirs(path, exist_ok=True)
-        return path
+        return self._usable_dir(path, "临时目录",
+                                os.path.join(DATA_DIR, "temp"))
 
     def proxies(self):
         proxy = (self.get("proxy") or "").strip()

@@ -49,3 +49,9 @@ anime-downloader-*.tar.sha256
 data/browser-profile/
 
 data/logs/
+
+# .NET 构建产物
+desktop/webview2-host/bin/
+desktop/webview2-host/obj/
+desktop/webview2-host/publish/
+data/webview2/

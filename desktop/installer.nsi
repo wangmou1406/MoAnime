@@ -16,7 +16,9 @@ SetCompressor /SOLID lzma
 !define APP_NAME        "动漫下载机"
 !define APP_NAME_EN     "Anime Downloader"
 !define APP_VERSION     "3.1.0"
-!define APP_EXE         "动漫下载机.exe"
+!define APP_EXE         "AnimeDownloader.exe"
+; 后端 exe 也要结束，否则覆盖 backend\ 下的文件会失败
+!define BACKEND_EXE     "动漫下载机.exe"
 !define APP_PUBLISHER   "Anime Downloader"
 !define APP_ID          "AnimeDownloader"
 !define UNINST_KEY      "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_ID}"
@@ -57,6 +59,7 @@ Section "主程序" SecMain
 
   ; 先结束正在运行的实例，否则文件被占用、覆盖会失败
   nsExec::Exec 'taskkill /IM "${APP_EXE}" /F'
+  nsExec::Exec 'taskkill /IM "${BACKEND_EXE}" /F'
   Sleep 600
 
   SetOutPath "$INSTDIR"
@@ -89,6 +92,7 @@ SectionEnd
 ; ---------------- 卸载 ----------------
 Section "Uninstall"
   nsExec::Exec 'taskkill /IM "${APP_EXE}" /F'
+  nsExec::Exec 'taskkill /IM "${BACKEND_EXE}" /F'
   Sleep 600
 
   Delete "$DESKTOP\${APP_NAME}.lnk"

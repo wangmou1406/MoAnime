@@ -4,17 +4,27 @@
 用法（在项目根执行）：
     powershell -ExecutionPolicy Bypass -File desktop\build.ps1
 
-做两件事：
-  1. PyInstaller 按 app.spec 打包 → dist\\desktop\\动漫下载机\\
-  2. NSIS 用 installer.nsi 打安装包 → dist\\desktop\\动漫下载机-<版本>-Setup.exe
+三步：
+  1. PyInstaller 打包 Python 后端      -> dist\desktop\动漫下载机\backend\
+  2. dotnet 发布 System WebView 宿主    -> dist\desktop\动漫下载机\（根目录）
+  3. NSIS 打安装包                      -> dist\desktop\动漫下载机-<版本>-Setup.exe
 
-NSIS 用的是便携版 makensis（不装系统组件），默认在
-    %LOCALAPPDATA%\\ad-tools\\nsis\\nsis-3.11\\makensis.exe
-可以用 -Makensis 参数指定别的路径。
+架构说明（System WebView 方案）：
+    宿主 AnimeDownloader.exe 只是个小壳子，界面靠**系统自带的 WebView2** 渲染，
+    不打包任何浏览器内核 —— 和 Tauri / Wails / Neutralino 一个思路。
+    Python 后端（Flask）负责全部业务逻辑，由宿主拉起、随窗口关闭而结束。
+
+参数：
+    -SkipBackend           跳过 PyInstaller（后端没改时省时间）
+    -SkipHost              跳过 dotnet 发布
+    -FrameworkDependent    宿主改为框架依赖发布（约 2MB，但目标机需装 .NET 8 桌面运行时）
+    -Makensis              指定 makensis 路径
 """
 param(
-    [string]$Makensis = "$env:LOCALAPPDATA\ad-tools\nsis\nsis-3.11\makensis.exe",
-    [switch]$SkipPyInstaller
+    [switch]$SkipBackend,
+    [switch]$SkipHost,
+    [switch]$FrameworkDependent,
+    [string]$Makensis = "$env:LOCALAPPDATA\ad-tools\nsis\nsis-3.11\makensis.exe"
 )
 
 $ErrorActionPreference = 'Stop'
@@ -24,43 +34,86 @@ $DesktopDir = $PSScriptRoot
 $ProjectRoot = Split-Path -Parent $DesktopDir
 $Python = Join-Path $ProjectRoot '.venv\Scripts\python.exe'
 
+$AppRoot = Join-Path $ProjectRoot 'dist\desktop\动漫下载机'
+$BackendDir = Join-Path $AppRoot 'backend'
+$HostDir = Join-Path $DesktopDir 'webview2-host'
+
 function Write-Step($msg) {
     Write-Host ""
     Write-Host "=== $msg" -ForegroundColor Cyan
 }
 
-# ---------------------------------------------------------------- 前置检查
 if (-not (Test-Path -LiteralPath $Python)) {
     throw "找不到虚拟环境解释器：$Python`n请先运行 python\启动.bat 完成初始化。"
 }
 
-# ---------------------------------------------------------------- 1) PyInstaller
-if (-not $SkipPyInstaller) {
-    Write-Step "1/2 打包桌面程序（PyInstaller）"
+# ---------------------------------------------------------------- 1) 后端
+if (-not $SkipBackend) {
+    Write-Step "1/3 打包 Python 后端（PyInstaller）"
+    $staging = Join-Path $ProjectRoot 'dist\desktop\_pyi_staging'
+    if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }
     Push-Location $ProjectRoot
     try {
         & $Python -m PyInstaller --noconfirm --clean `
-            --distpath (Join-Path $ProjectRoot 'dist\desktop') `
+            --distpath $staging `
             --workpath (Join-Path $ProjectRoot 'data\_pyi') `
             (Join-Path $DesktopDir 'app.spec')
         if ($LASTEXITCODE -ne 0) { throw "PyInstaller 失败（退出码 $LASTEXITCODE）" }
     } finally {
         Pop-Location
     }
+    # PyInstaller 产出 <staging>\动漫下载机\，摊平到 backend\ 下
+    if (Test-Path -LiteralPath $BackendDir) { Remove-Item -LiteralPath $BackendDir -Recurse -Force }
+    New-Item -ItemType Directory -Force -Path $BackendDir | Out-Null
+    Move-Item (Join-Path $staging '动漫下载机\*') $BackendDir -Force
+    Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Host "    -> $BackendDir"
 }
 
-$AppDir = Join-Path $ProjectRoot 'dist\desktop\动漫下载机'
-if (-not (Test-Path -LiteralPath (Join-Path $AppDir '动漫下载机.exe'))) {
-    throw "打包产物不完整，没有找到 动漫下载机.exe：$AppDir"
-}
-$size = (Get-ChildItem $AppDir -Recurse -File | Measure-Object Length -Sum).Sum
-Write-Host ("    程序目录：{0}" -f $AppDir)
-Write-Host ("    体积：{0:N0} MB" -f ($size / 1MB))
+# ---------------------------------------------------------------- 2) 宿主
+if (-not $SkipHost) {
+    Write-Step "2/3 发布 System WebView 宿主（dotnet）"
+    $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
+    $out = Join-Path $HostDir 'publish'
+    if (Test-Path -LiteralPath $out) { Remove-Item -LiteralPath $out -Recurse -Force }
 
-# ---------------------------------------------------------------- 2) NSIS
-Write-Step "2/2 制作安装包（NSIS）"
+    $selfContained = if ($FrameworkDependent) { 'false' } else { 'true' }
+    Push-Location $HostDir
+    try {
+        & dotnet publish -c Release -r win-x64 `
+            --self-contained $selfContained `
+            -o $out --nologo
+        if ($LASTEXITCODE -ne 0) { throw "dotnet publish 失败（退出码 $LASTEXITCODE）" }
+    } finally {
+        Pop-Location
+    }
+
+    if (-not (Test-Path -LiteralPath $AppRoot)) {
+        New-Item -ItemType Directory -Force -Path $AppRoot | Out-Null
+    }
+    Copy-Item (Join-Path $out '*') $AppRoot -Recurse -Force
+    # 去掉调试符号和 XML 文档，安装包里用不上
+    Get-ChildItem $AppRoot -Filter '*.xml' -File | Remove-Item -Force -ErrorAction SilentlyContinue
+    Get-ChildItem $AppRoot -Filter '*.pdb' -File | Remove-Item -Force -ErrorAction SilentlyContinue
+    Write-Host "    -> $AppRoot  (自包含=$(-not $FrameworkDependent))"
+}
+
+# ---------------------------------------------------------------- 校验
+$hostExe = Join-Path $AppRoot 'AnimeDownloader.exe'
+$backendExe = Join-Path $BackendDir '动漫下载机.exe'
+foreach ($p in @($hostExe, $backendExe)) {
+    if (-not (Test-Path -LiteralPath $p)) { throw "缺少打包产物：$p" }
+}
+$size = (Get-ChildItem $AppRoot -Recurse -File | Measure-Object Length -Sum).Sum
+Write-Host ""
+Write-Host ("    宿主：{0}" -f $hostExe)
+Write-Host ("    后端：{0}" -f $backendExe)
+Write-Host ("    合计：{0:N0} MB" -f ($size / 1MB))
+
+# ---------------------------------------------------------------- 3) 安装包
+Write-Step "3/3 制作安装包（NSIS）"
 if (-not (Test-Path -LiteralPath $Makensis)) {
-    throw "找不到 makensis：$Makensis`n用 -Makensis 指定路径，或按 README 下载 NSIS 便携版。"
+    throw "找不到 makensis：$Makensis`n用 -Makensis 指定路径，或下载 NSIS 便携版。"
 }
 Push-Location $DesktopDir
 try {
@@ -72,10 +125,8 @@ try {
 
 $setup = Get-ChildItem (Join-Path $ProjectRoot 'dist\desktop') -Filter '*Setup.exe' |
     Sort-Object LastWriteTime -Descending | Select-Object -First 1
-if ($setup) {
-    Write-Step "完成"
-    Write-Host ("    安装包：{0}" -f $setup.FullName) -ForegroundColor Green
-    Write-Host ("    体积：{0:N0} MB" -f ($setup.Length / 1MB))
-} else {
-    throw "没有生成安装包"
-}
+if (-not $setup) { throw "没有生成安装包" }
+
+Write-Step "完成"
+Write-Host ("    安装包：{0}" -f $setup.FullName) -ForegroundColor Green
+Write-Host ("    体积：{0:N0} MB" -f ($setup.Length / 1MB))

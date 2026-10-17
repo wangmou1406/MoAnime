@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    System WebView 宿主：不打包浏览器，直接使用系统内置的 WebView2 运行时。
+    这和 Tauri / Wails / Neutralino 的思路一致 —— 省掉 500MB 的 Chromium。
+
+    产物只是一个小小的 .exe + WebView2Loader.dll，
+    真正的界面由系统 Edge WebView2（Windows 10/11 自带）渲染。
+
+    后端（Python/Flask）仍然由 PyInstaller 打成 动漫下载机.exe，
+    本程序负责：启动后端 → 等它就绪 → 开窗口 → 关窗口时结束后端。
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>AnimeDownloader</AssemblyName>
+    <RootNamespace>AnimeDownloader.Web</RootNamespace>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <Platforms>x64</Platforms>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <!-- 框架依赖发布：体积小（几 MB），要求目标机有 .NET Desktop Runtime。
+         .NET 8 桌面运行时在 Win10/11 上并非预装，所以安装包里要一并处理（见 installer.nsi）。 -->
+    <SelfContained>false</SelfContained>
+    <!-- 不裁剪：WinForms + WebView2 的 COM 互操作对裁剪很敏感 -->
+    <PublishTrimmed>false</PublishTrimmed>
+    <SatelliteResourceLanguages>en;zh-Hans</SatelliteResourceLanguages>
+    <Version>3.1.0</Version>
+    <FileVersion>3.1.0.0</FileVersion>
+    <Product>动漫下载机 Anime Downloader</Product>
+    <AssemblyTitle>动漫下载机</AssemblyTitle>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
+  </ItemGroup>
+
+</Project>
