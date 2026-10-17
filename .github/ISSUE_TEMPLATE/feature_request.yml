@@ -6,8 +6,10 @@ body:
   - type: markdown
     attributes:
       value: |
-        提之前建议先看一眼 [README 的功能表](../#二快速开始) 和
-        [CHANGELOG](../blob/main/CHANGELOG.md)，也许已经有类似能力了。
+        提之前建议先看一眼仓库根目录的 **README.md**（有完整功能表）和
+        **CHANGELOG.md**，也许已经有类似能力了。
+
+        ⚠️ 请不要在这里贴受版权保护的资源链接或站点凭据。
 
   - type: textarea
     id: problem
