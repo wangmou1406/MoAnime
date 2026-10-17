@@ -1,4 +1,4 @@
-﻿# ============================================================
+# ============================================================
 #  动漫下载机 后台启动：服务在后台常驻，关掉本窗口也继续运行
 #  用法：powershell -ExecutionPolicy Bypass -File 后台启动.ps1
 #  停止：powershell -ExecutionPolicy Bypass -File 停止.ps1
@@ -33,6 +33,12 @@ if ($listening) {
 $outLog = Join-Path $PSScriptRoot 'logs\service.out.log'
 $errLog = Join-Path $PSScriptRoot 'logs\service.err.log'
 New-Item -ItemType Directory -Force -Path (Join-Path $PSScriptRoot 'logs') | Out-Null
+
+# 这两个文件装的是「本次运行」的原始 stdout / stderr，**没有轮转**，
+# 程序一直跑就会一直涨（实测曾一天涨到 750 MB）。
+# 真正的日志是 logs\app.log，它由 RotatingFileHandler 管着（5 MB × 3 份）。
+# 所以每次启动前先把上一次的输出清掉，保证它最多只有一"轮"的量。
+Remove-Item $outLog, $errLog -Force -ErrorAction SilentlyContinue
 
 # 注意：项目路径含空格，run.py 的路径必须自带引号，否则会被拆成多个参数
 $runScript = Join-Path $PSScriptRoot 'run.py'

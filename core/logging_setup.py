@@ -5,6 +5,23 @@ import logging
 import os
 import threading
 import time
+import warnings
+
+# ---------------------------------------------------------------- 静音噪音警告
+# urllib3 会对**每一个**「跳过证书校验」的请求打一条 InsecureRequestWarning。
+# 本程序访问的资源站证书经常不合规（自签、过期、域名不匹配），默认 verify_ssl=False，
+# 于是每下载一个分片就刷一条警告 —— 一集 382 个分片就是 382 条。
+# 实测：这套警告一天能往 stderr 里写 750 MB，把真正的错误彻底埋掉。
+#
+# 这类警告在这里属于**预期行为**，不是问题，所以统一静音。
+# 需要看 TLS 细节时，把 log_level 调到 DEBUG 或临时注释掉这一段即可。
+try:
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    warnings.filterwarnings("ignore",
+                            category=urllib3.exceptions.InsecureRequestWarning)
+except Exception:  # noqa: BLE001  没装 urllib3 或版本不同，忽略即可
+    pass
 
 from .config import LOG_FILE, config
 
