@@ -72,4 +72,4 @@ desktop/   桌面版：C# 宿主 + PyInstaller spec + NSIS 脚本 + dist
 
 ## 许可
 
-提交 PR 即表示你同意以本仓库的 [MIT License](LICENSE) 授权你的贡献。
+提交 PR 即表示你同意以本仓库的 [MIT License](../LICENSE) 授权你的贡献。

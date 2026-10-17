@@ -36,9 +36,9 @@ Python + Flask 重写的动漫下载软件（Web 界面），参考了
 | [下载位置](#三个版本的下载位置) | 三个版本的文件分别落在哪 |
 | [功能](#一内置动漫源开箱可用) | 源管理、检索、下载、字幕、广告体检、外观 |
 | [API](#五api-一览前端与第三方都可调用) | REST 接口一览 |
-| [贡献](CONTRIBUTING.md) | 怎么提 Issue / PR、怎么加一个源 |
+| [贡献](.github/CONTRIBUTING.md) | 怎么提 Issue / PR、怎么加一个源 |
 | [更新日志](CHANGELOG.md) | 版本变更 |
-| [安全策略](SECURITY.md) · [行为准则](CODE_OF_CONDUCT.md) | — |
+| [安全策略](.github/SECURITY.md) · [行为准则](.github/CODE_OF_CONDUCT.md) | — |
 | [许可证](LICENSE) | MIT |
 
 ---
@@ -1379,4 +1379,4 @@ Get-NetTCPConnection -LocalPort 8848 -State Listen     # 有输出=在跑；无�
 如果你不接受以上条款，请不要使用。
 
 若你是版权方并认为本项目有问题，请通过
-[私密渠道](SECURITY.md) 联系；本仓库本身不含任何受版权保护的内容。
+[私密渠道](.github/SECURITY.md) 联系；本仓库本身不含任何受版权保护的内容。
