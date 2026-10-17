@@ -114,24 +114,94 @@ internal static class Program
 
     // ------------------------------------------------------------------ 路径
 
+    private static string? _dataDir;
+
     /// <summary>
-    /// 数据目录：默认 %LOCALAPPDATA%\AnimeDownloader\data。
-    /// 允许用 AD_DATA_DIR 覆盖 —— 便携部署、或者把数据放到别的盘时用得上，
-    /// 也方便自动化测试把目录指到工作区内。
+    /// 数据目录，**按可写性逐级回退**：
+    ///   AD_DATA_DIR → %LOCALAPPDATA% → %APPDATA% → %TEMP% → exe 同级 data\
+    ///
+    /// 为什么不能只用 %LOCALAPPDATA%：
+    ///   受限账户、企业策略、漫游配置、或者被安全软件"受控文件夹访问"锁住时，
+    ///   那里根本建不出目录。早先这里直接 Directory.CreateDirectory 就抛，
+    ///   宿主立刻 Fatal 退出 —— 用户只看到"打不开"，日志也写不出来。
+    ///   后端（Python）一直有多级回退，宿主这边没跟上，这里补齐。
     /// </summary>
     private static string DataDir
     {
         get
         {
+            if (_dataDir is not null) return _dataDir;
+
             var overridden = Environment.GetEnvironmentVariable("AD_DATA_DIR");
-            if (!string.IsNullOrWhiteSpace(overridden)) return overridden;
-            return Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                AppName, "data");
+            if (!string.IsNullOrWhiteSpace(overridden) && TryEnsureWritable(overridden))
+            {
+                _dataDir = overridden;
+                return _dataDir;
+            }
+
+            var candidates = new List<string>();
+            var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            var temp = Path.GetTempPath();
+            if (!string.IsNullOrWhiteSpace(local))
+                candidates.Add(Path.Combine(local, AppName, "data"));
+            if (!string.IsNullOrWhiteSpace(roaming))
+                candidates.Add(Path.Combine(roaming, AppName, "data"));
+            if (!string.IsNullOrWhiteSpace(temp))
+                candidates.Add(Path.Combine(temp, AppName, "data"));
+            candidates.Add(Path.Combine(AppContext.BaseDirectory, "data"));
+
+            foreach (var candidate in candidates)
+            {
+                if (TryEnsureWritable(candidate))
+                {
+                    _dataDir = candidate;
+                    return _dataDir;
+                }
+            }
+            // 全都不可写（几乎不可能）—— 仍然返回第一个，让后面的错误信息更有指向性
+            _dataDir = candidates[0];
+            return _dataDir;
+        }
+    }
+
+    /// <summary>目录能否创建**并真正写入**（只"能创建"不算数）。</summary>
+    private static bool TryEnsureWritable(string dir)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(dir, "logs"));
+            var probe = Path.Combine(dir, ".write-probe");
+            File.WriteAllText(probe, "ok");
+            File.Delete(probe);
+            return true;
+        }
+        catch
+        {
+            return false;
         }
     }
 
     private static string LogDir => Path.Combine(DataDir, "logs");
+
+    /// <summary>
+    /// WebView2 的缓存/配置目录，**跟随已解析出的 DataDir**（放在它旁边）。
+    ///
+    /// 不能再用 %LOCALAPPDATA%：DataDir 可能已经回退到 %TEMP% 或程序目录，
+    /// 这时 WebView2 若还去 %LOCALAPPDATA% 建 profile 就会失败 ——
+    /// 表现为窗口闪一下就关（走了 OnLoad 里的失败分支）。
+    /// 这个坑实测踩过一次。
+    /// </summary>
+    internal static string WebViewDataDir
+    {
+        get
+        {
+            var parent = Path.GetDirectoryName(DataDir.TrimEnd('\\', '/'));
+            if (!string.IsNullOrWhiteSpace(parent))
+                return Path.Combine(parent, "webview2");
+            return Path.Combine(DataDir, "webview2");
+        }
+    }
 
     /// <summary>后端 exe：优先 backend\ 子目录，其次与本程序同级。</summary>
     private static string? ResolveBackend()
@@ -161,7 +231,10 @@ internal static class Program
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
         };
-        // 数据目录交给后端自己决定（它有多级回退），这里不强行覆盖
+        // 数据目录由宿主定好后**显式传给后端**：避免两边各猜一套回退顺序，
+        // 结果一个落在 %LOCALAPPDATA%、一个落在 %TEMP%，用户找不到自己的设置。
+        psi.Environment["AD_DATA_DIR"] = DataDir;
+        psi.Environment["AD_LOG_DIR"] = Path.Combine(DataDir, "logs");
         psi.Environment["AD_DESKTOP_HOST"] = "1";
 
         var proc = Process.Start(psi) ?? throw new InvalidOperationException("进程未启动");
@@ -289,7 +362,7 @@ internal sealed class MainForm : Form
         {
             var env = await CoreWebView2Environment.CreateAsync(
                 browserExecutableFolder: null,
-                userDataFolder: ProgramPaths.WebViewDataDir);
+                userDataFolder: Program.WebViewDataDir);
 
             await _webView.EnsureCoreWebView2Async(env);
 
@@ -325,27 +398,6 @@ internal sealed class MainForm : Form
                 "动漫下载机 Anime Downloader",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
             Close();
-        }
-    }
-}
-
-internal static class ProgramPaths
-{
-    /// <summary>WebView2 的缓存/配置目录。跟随数据目录，卸载时可一并清理。</summary>
-    public static string WebViewDataDir
-    {
-        get
-        {
-            var dataDir = Environment.GetEnvironmentVariable("AD_DATA_DIR");
-            if (!string.IsNullOrWhiteSpace(dataDir))
-            {
-                var parent = Path.GetDirectoryName(dataDir.TrimEnd('\\', '/'));
-                if (!string.IsNullOrWhiteSpace(parent))
-                    return Path.Combine(parent, "webview2");
-            }
-            return Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "AnimeDownloader", "webview2");
         }
     }
 }

@@ -228,8 +228,14 @@ def text_ad_stream():
 
     # 惰性导入检测器（依赖 ffmpeg 与 PowerShell OCR，只在用到时加载）
     try:
-        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        tools_dir = os.path.join(root_dir, "tools")
+        # 目录层级不要手数 dirname。
+        # 本文件在 web/routes/ 下是**三层**，而当初它是 web/routes_api.py（两层），
+        # 拆分时这里漏改，dirname 只退了两级 → tools_dir 算成 <项目>/web/tools
+        # → import ad_detect 抛 "No module named 'ad_detect'"，
+        # 文字广告体检整个通道失效（桌面版因为打包路径更深，更容易暴露）。
+        # 统一改用 config.ROOT_DIR（它自己处理了 PyInstaller 的 _internal 布局）。
+        from core.config import ROOT_DIR
+        tools_dir = os.path.join(ROOT_DIR, "tools")
         if tools_dir not in sys.path:
             sys.path.insert(0, tools_dir)
         import importlib
@@ -401,8 +407,9 @@ def ad_check_stream():
     detector = None
     if not skip_text:
         try:
-            root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            tools_dir = os.path.join(root_dir, "tools")
+            # 同 text_ad_stream：不要手数 dirname，用 config.ROOT_DIR
+            from core.config import ROOT_DIR
+            tools_dir = os.path.join(ROOT_DIR, "tools")
             if tools_dir not in sys.path:
                 sys.path.insert(0, tools_dir)
             import importlib
