@@ -6,9 +6,23 @@
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# 脚本位于 python\ 子目录，项目根是它的上一级（.venv / run.py / data 都在那里）
-$ProjectRoot = Split-Path -Parent $PSScriptRoot
+# 目录布局（重组后）：
+#   python\       ← 本脚本所在（运行根：.venv / data / logs / downloads）
+#   ..\source\    ← 代码根（run.py / core / web / tools）
+# 程序的数据目录默认按「代码位置」推算，所以这里用环境变量把它钉到 python\ 下，
+# 否则数据库/日志会跑到 source\data 里去。
+$ProjectRoot = $PSScriptRoot
+$SourceRoot = Join-Path (Split-Path -Parent $PSScriptRoot) 'source'
 Set-Location -Path $ProjectRoot
+
+$env:AD_DATA_DIR = Join-Path $ProjectRoot 'data'
+$env:AD_LOG_DIR = Join-Path $ProjectRoot 'logs'
+$env:AD_BUNDLED_DIR = Join-Path $ProjectRoot 'data\_pwt'
+# 下载目录：只在首次运行（还没有 settings.json）时给默认值，
+# 之后以界面里的设置为准 —— 否则环境变量会永久压住用户的选择。
+if (-not (Test-Path (Join-Path $ProjectRoot 'data\settings.json'))) {
+    $env:AD_DOWNLOAD_DIR = Join-Path $ProjectRoot 'downloads'
+}
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
 function Write-Title {
@@ -163,7 +177,7 @@ Write-Host "      关闭本窗口即可停止程序"
 Write-Host "      想让它常驻（关掉窗口也继续跑）：用 .\后台启动.ps1" -ForegroundColor DarkGray
 Write-Host ""
 
-& $python run.py @args
+& $python "$SourceRoot\run.py" @args
 
 Write-Host ""
 Write-Host "程序已退出（退出码 $LASTEXITCODE）"

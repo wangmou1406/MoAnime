@@ -25,8 +25,8 @@ services:
   anime-downloader:
     build:
       # 上下文必须是项目根（那里才有 core/ web/ static/）
-      context: ..
-      dockerfile: docker/Dockerfile
+      context: ../source
+      dockerfile: ../docker/Dockerfile
       args:
         # 国内网络拉 Chromium 慢的话，把下面这行取消注释（约 36 秒 vs 50 分钟）
         # PLAYWRIGHT_DOWNLOAD_HOST: "https://cdn.npmmirror.com/binaries/playwright"
@@ -44,9 +44,9 @@ services:
       # 注意：compose 里的相对路径是相对**本文件所在目录**（docker/）解析的，
       # 所以要回到上一级去找项目根下的 downloads / docker-data。
       # 数据库 / 设置 / 日志 / 缩略图缓存 / 检索历史
-      - "${AD_DATA_HOST:-../docker-data}:/data"
+      - "${AD_DATA_HOST:-./docker-data}:/data"
       # 下载好的视频与字幕：宿主机路径 ←→ 容器内路径，两端都由变量控制
-      - "${AD_DOWNLOAD_HOST:-../downloads}:${AD_IN_DOWNLOAD:-/downloads}"
+      - "${AD_DOWNLOAD_HOST:-./downloads}:${AD_IN_DOWNLOAD:-/downloads}"
 
     environment:
       # 这些会覆盖界面里的设置，容器部署建议只用环境变量

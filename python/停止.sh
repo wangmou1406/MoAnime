@@ -10,7 +10,9 @@
 # ============================================================================
 set -uo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# python/ = 运行根（data/settings.json 在这里）
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SRC="$(cd "$ROOT/../source" && pwd)"
 cd "$ROOT"
 
 PORT="${1:-}"

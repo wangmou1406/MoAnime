@@ -15,11 +15,14 @@ from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
 
 # SPECPATH 是 PyInstaller 注入的变量：本 spec 所在目录（desktop/）
 DESKTOP_DIR = SPECPATH
-PROJECT_ROOT = os.path.abspath(os.path.join(DESKTOP_DIR, '..'))
+BASE_DIR = os.path.abspath(os.path.join(DESKTOP_DIR, '..'))
+# 代码在 source/，运行期资产（内核）在 python/data/ —— 两处都不在 desktop/ 下
+SOURCE_ROOT = os.path.join(BASE_DIR, 'source')
+PYTHON_ROOT = os.path.join(BASE_DIR, 'python')
 
 datas = [
-    (os.path.join(PROJECT_ROOT, 'static'), 'static'),
-    (os.path.join(PROJECT_ROOT, 'templates'), 'templates'),
+    (os.path.join(SOURCE_ROOT, 'static'), 'static'),
+    (os.path.join(SOURCE_ROOT, 'templates'), 'templates'),
 ]
 
 # tools/ 里有运行时真正要用的东西：
@@ -27,7 +30,7 @@ datas = [
 #   win_ocr.ps1        Windows OCR 兜底
 #   ad_detect.py       文字广告体检（被 importlib 动态加载）
 #   ffmpeg.exe         HLS 转 mp4
-tools_src = os.path.join(PROJECT_ROOT, 'tools')
+tools_src = os.path.join(SOURCE_ROOT, 'tools')
 if os.path.isdir(tools_src):
     for name in os.listdir(tools_src):
         if name == '__pycache__':
@@ -37,7 +40,7 @@ if os.path.isdir(tools_src):
             datas.append((full, 'tools'))
 
 # 内置浏览器内核 + Node（可选：目录不在就跳过，功能会退化成纯 HTTP 取流）
-pwt = os.path.join(PROJECT_ROOT, 'data', '_pwt')
+pwt = os.path.join(PYTHON_ROOT, 'data', '_pwt')
 if os.path.isdir(pwt):
     datas.append((pwt, os.path.join('data', '_pwt')))
 
@@ -71,7 +74,7 @@ hiddenimports = [
 
 a = Analysis(
     [os.path.join(DESKTOP_DIR, 'desktop_main.py')],
-    pathex=[PROJECT_ROOT, DESKTOP_DIR],
+    pathex=[SOURCE_ROOT, DESKTOP_DIR],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,

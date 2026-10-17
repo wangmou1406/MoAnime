@@ -13,7 +13,7 @@ Python + Flask 重写的动漫下载软件（Web 界面），参考了
 ├── 后台启动.ps1             后台常驻启动（关掉窗口也继续跑）
 ├── 停止.ps1                 按端口停止服务（会先确认是本程序）
 ├── requirements.txt
-├── core/                    核心层
+├── source/core/                    核心层
 │   ├── config.py            全局设置（settings.json 持久化）
 │   ├── database.py          SQLite 持久层（动漫源 / 任务 / 历史 / 检索历史）
 │   ├── download_engine.py   HLS 分片 + 直链下载引擎（可暂停/继续/取消）
@@ -63,11 +63,11 @@ Python + Flask 重写的动漫下载软件（Web 界面），参考了
 │       ├── events.js        全局事件绑定（带目录注释）
 │       └── main.js          入口：把 boot() 挂到 DOMContentLoaded
 ├── static/vendor/           本地化的 Bootstrap / 图标 / Sortable / Socket.IO
-├── tools/                   辅助脚本（自检、单测、依赖下载、缓存自检）
-├── data/                    SQLite 数据库与 settings.json
-├── data/_pwt/               内置浏览器内核 + 内置 Node + playwright-core（约 525 MB）
+├── source/tools/                   辅助脚本（自检、单测、依赖下载、缓存自检）
+├── python/data/                    SQLite 数据库与 settings.json
+├── python/data/_pwt/               内置浏览器内核 + 内置 Node + playwright-core（约 525 MB）
 ├── dist/                    Docker 镜像归档（docker save 产物，不进版本库）
-├── downloads/               默认下载目录
+├── python/downloads/               默认下载目录
 └── logs/app.log             运行日志
 ```
 
@@ -128,18 +128,25 @@ Python + Flask 重写的动漫下载软件（Web 界面），参考了
 
 ## 二、快速开始
 
-本项目有**三种交付形态**，各自一个文件夹：
+根目录下只有**四个文件夹**，一眼能认出来：
 
 ```
 MoAnime/
-├── docker/    Docker 版（镜像自带 ffmpeg + Chromium 内核，适合 NAS/服务器）
-├── python/    Python 版（.venv 直接跑，适合改代码/调试）
-├── desktop/   桌面版（双击即用的 exe + 安装包，适合普通用户）
-└── core/ web/ static/ sources/ tools/ ...   ← 三版共用的同一份源码
+├── source/    共享源码（唯一真源：core / web / sources / static / templates / tools / run.py）
+├── docker/    Docker 版   Dockerfile · compose · .env.example · docker-data/ · dist/
+├── python/    Python 版   启动脚本 · .venv/ · data/ · logs/ · downloads/ · dist/
+└── desktop/   桌面版     宿主工程 · app.spec · installer.nsi · build.ps1 · dist/
 ```
 
-> 三版**共用一份源码**，只是启动方式和打包方式不同；这样修 bug 不用改三遍。
-> 各文件夹里都有自己的 `README.md` 详细说明。
+> 三版**共用 `source/` 里的同一份源码**，只是启动与打包方式不同 —— 修 bug 不用改三遍。
+> 每个版本文件夹里有自己的 `README.md`，说明该版本的用法与下载位置。
+
+| 目录 | 是什么 | 里面有什么 |
+| --- | --- | --- |
+| `source/` | 代码（只读即可） | Python 源码、前端资源、`tools/ffmpeg.exe`、`.dockerignore` |
+| `docker/` | 容器部署 | `Dockerfile`、`docker-compose.yml`、`.env.example`、`dist/`（镜像 tar） |
+| `python/` | 本机跑 | 启动/停止脚本、`.venv/`、`data/`（库+设置+日志）、`downloads/`、`dist/` |
+| `desktop/` | Windows 桌面 | C# 宿主工程、PyInstaller spec、NSIS 脚本、`dist/`（exe+安装包） |
 
 ### 平台兼容性
 
@@ -176,8 +183,8 @@ sudo dnf install ffmpeg google-noto-sans-cjk-fonts   # Fedora
 
 | 版本 | 默认下载位置 | 临时目录 | 怎么改 |
 | --- | --- | --- | --- |
-| **`python/`** | `<项目根>/downloads/` | `<下载目录>/.tmp/` | 界面【设置 → 下载位置】，或 `AD_DOWNLOAD_DIR` |
-| **`docker/`** | 容器内 `/downloads/`（挂载到宿主机） | `/downloads/.tmp/` | `AD_DOWNLOAD_HOST` / `AD_IN_DOWNLOAD`（见 `.env.example`） |
+| **`python/`** | `python/downloads/` | `python/downloads/.tmp/` | 界面【设置 → 下载位置】，或 `AD_DOWNLOAD_DIR` |
+| **`docker/`** | 容器内 `/downloads/`（挂载到 `docker/downloads/`） | `/downloads/.tmp/` | `AD_DOWNLOAD_HOST` / `AD_IN_DOWNLOAD`（见 `.env.example`） |
 | **`desktop/`** | `%USERPROFILE%\Downloads\AnimeDownloader` | 同上 `.tmp` 规则 | 界面【设置 → 下载位置】 |
 
 临时目录**永远跟随下载目录**（`<下载目录>/.tmp`），所以只需要改一处。
@@ -187,8 +194,8 @@ sudo dnf install ffmpeg google-noto-sans-cjk-fonts   # Fedora
 
 | 版本 | 数据目录 |
 | --- | --- |
-| `python/` | `<项目根>/data/` |
-| `docker/` | 容器内 `/data/`（挂载到宿主机的 `docker-data/`） |
+| `python/` | `python/data/` |
+| `docker/` | 容器内 `/data/`（挂载到 `docker/docker-data/`） |
 | `desktop/` | `%LOCALAPPDATA%\AnimeDownloader\data`（程序目录只读也不影响） |
 
 ### 桌面版（普通用户推荐）
@@ -197,7 +204,7 @@ sudo dnf install ffmpeg google-noto-sans-cjk-fonts   # Fedora
 powershell -ExecutionPolicy Bypass -File desktop\build.ps1
 ```
 
-产出免安装版 `dist\desktop\动漫下载机\` 和安装包 `dist\desktop\动漫下载机-3.1.0-Setup.exe`。
+产出免安装版 `desktop\dist\动漫下载机\` 和安装包 `desktop\dist\动漫下载机-3.1.0-Setup.exe`。
 安装包**按用户安装到 `%LOCALAPPDATA%\Programs`，不需要管理员权限**，自带卸载程序。
 
 界面用 **System WebView** 方案：宿主 `AnimeDownloader.exe` 调用 **Windows 自带的
@@ -234,9 +241,9 @@ powershell -ExecutionPolicy Bypass -File python\launcher.ps1 --port 9000 --no-br
 ### 方式 4：直接用虚拟环境的解释器
 ```powershell
 cd "C:\Users\luoji\Desktop\项目文件\DeepSeek Harness\软件\MoAnime"
-.\.venv\Scripts\python.exe run.py            # 默认 http://127.0.0.1:8848
-.\.venv\Scripts\python.exe run.py --port 9000 --no-browser
-.\.venv\Scripts\python.exe run.py --host 0.0.0.0     # 局域网访问
+.\.venv\Scripts\python.exe ..\source\run.py            # 默认 http://127.0.0.1:8848
+.\.venv\Scripts\python.exe ..\source\run.py --port 9000 --no-browser
+.\.venv\Scripts\python.exe ..\source\run.py --host 0.0.0.0     # 局域网访问
 ```
 
 启动后在「检索」页输入片名（例如 `海贼`）回车，挑一个源里的条目 → 勾选剧集 → 下载即可。
@@ -265,7 +272,7 @@ docker compose up -d --build
 不用 compose 也可以（注意构建上下文是项目根）：
 
 ```bash
-docker build -t anime-downloader:latest -f docker/Dockerfile .
+docker build -t anime-downloader:latest -f docker/Dockerfile source
 docker run -d --name anime-downloader \
   -p 8848:8848 \
   -v "$PWD/docker-data:/data" \
@@ -1273,7 +1280,7 @@ Get-NetTCPConnection -LocalPort 8848 -State Listen     # 有输出=在跑；无�
 ```
 
 **Q：想让局域网里的其他设备访问？**
-`.\.venv\Scripts\python.exe run.py --host 0.0.0.0`（命令行给的参数只影响本次运行，不会写进设置；
+`.\.venv\Scripts\python.exe ..\source\run.py --host 0.0.0.0`（命令行给的参数只影响本次运行，不会写进设置；
 要永久生效请在网页「设置」里改“监听地址”。）
 
 **Q：数据存在哪？**

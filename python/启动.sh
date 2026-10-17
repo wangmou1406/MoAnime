@@ -16,7 +16,20 @@
 set -euo pipefail
 
 # 脚本在 python/ 子目录，项目根是它的上一级
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# 目录布局：
+#   python/      ← 本脚本所在（运行根：.venv / data / logs / downloads）
+#   ../source/   ← 代码根（run.py / core / web / tools）
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SRC="$(cd "$ROOT/../source" && pwd)"
+# 把数据目录钉在 python/ 下（否则程序会按 config.py 的位置写到 source/data）
+export AD_DATA_DIR="$ROOT/data"
+export AD_LOG_DIR="$ROOT/logs"
+export AD_BUNDLED_DIR="$ROOT/data/_pwt"
+# 下载目录只在首次运行时给默认值，之后以界面设置为准
+if [ ! -f "$ROOT/data/settings.json" ]; then
+    export AD_DOWNLOAD_DIR="$ROOT/downloads"
+fi
+
 cd "$ROOT"
 
 echo "============================================================"
@@ -63,7 +76,7 @@ PY="$ROOT/.venv/bin/python"
 if ! "$PY" -c "import flask, flask_socketio, m3u8, bs4, lxml, Crypto" >/dev/null 2>&1; then
     echo "安装依赖（首次约 2~5 分钟）..."
     "$PY" -m pip install --upgrade pip >/dev/null 2>&1 || true
-    "$PY" -m pip install -r "$ROOT/requirements.txt" || {
+    "$PY" -m pip install -r "$SRC/requirements.txt" || {
         echo "✗ 依赖安装失败。若只是 OCR 相关包失败，可以先把"
         echo "  requirements.txt 里的 rapidocr-onnxruntime 注释掉再试"
         echo "  （那样文字广告体检会明确报「画面 OCR 不可用」）。"
@@ -74,8 +87,8 @@ fi
 # ---------------------------------------------------------------- 4) ffmpeg
 FFMPEG="$(command -v ffmpeg || true)"
 if [ -z "$FFMPEG" ]; then
-    if [ -x "$ROOT/tools/ffmpeg" ]; then
-        FFMPEG="$ROOT/tools/ffmpeg"
+    if [ -x "$SRC/tools/ffmpeg" ]; then
+        FFMPEG="$SRC/tools/ffmpeg"
         echo "使用项目自带 ffmpeg: $FFMPEG"
     else
         echo "⚠ 没找到 ffmpeg —— m3u8 转 mp4 会退化成 .ts 分段合并，建议安装："
@@ -89,4 +102,4 @@ fi
 
 # ---------------------------------------------------------------- 5) 启动
 echo "启动中 ... （Ctrl+C 停止）"
-exec "$PY" "$ROOT/run.py" "$@"
+exec "$PY" "$SRC/run.py" "$@"

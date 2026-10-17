@@ -37,10 +37,12 @@ $ErrorActionPreference = 'Stop'
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
 $DesktopDir = $PSScriptRoot
-$ProjectRoot = Split-Path -Parent $DesktopDir
-$Python = Join-Path $ProjectRoot '.venv\Scripts\python.exe'
+$BaseDir = Split-Path -Parent $DesktopDir
+$SourceRoot = Join-Path $BaseDir 'source'
+$PythonRoot = Join-Path $BaseDir 'python'
+$Python = Join-Path $PythonRoot '.venv\Scripts\python.exe'
 
-$AppRoot = Join-Path $ProjectRoot 'dist\desktop\动漫下载机'
+$AppRoot = Join-Path $DesktopDir 'dist\动漫下载机'
 $BackendDir = Join-Path $AppRoot 'backend'
 $HostDir = Join-Path $DesktopDir 'webview2-host'
 
@@ -59,13 +61,13 @@ if ([string]::IsNullOrWhiteSpace($Makensis)) {
 # ---------------------------------------------------------------- 1) 后端
 if (-not $SkipBackend) {
     Write-Step "1/3 打包 Python 后端（PyInstaller）"
-    $staging = Join-Path $ProjectRoot 'dist\desktop\_pyi_staging'
+    $staging = Join-Path $DesktopDir 'dist\_pyi_staging'
     if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }
-    Push-Location $ProjectRoot
+    Push-Location $SourceRoot
     try {
         & $Python -m PyInstaller --noconfirm --clean `
             --distpath $staging `
-            --workpath (Join-Path $ProjectRoot 'data\_pyi') `
+            --workpath (Join-Path $PythonRoot 'data\_pyi') `
             (Join-Path $DesktopDir 'app.spec')
         if ($LASTEXITCODE -ne 0) { throw "PyInstaller 失败（退出码 $LASTEXITCODE）" }
     } finally {
@@ -149,7 +151,7 @@ try {
     Pop-Location
 }
 
-$setup = Get-ChildItem (Join-Path $ProjectRoot 'dist\desktop') -Filter '*Setup.exe' |
+$setup = Get-ChildItem (Join-Path $DesktopDir 'dist') -Filter '*Setup.exe' |
     Sort-Object LastWriteTime -Descending | Select-Object -First 1
 if (-not $setup) { throw "没有生成安装包" }
 

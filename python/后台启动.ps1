@@ -6,9 +6,23 @@
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# 脚本位于 python\ 子目录，项目根是它的上一级（.venv / run.py / data 都在那里）
-$ProjectRoot = Split-Path -Parent $PSScriptRoot
+# 目录布局：
+#   python\      ← 本脚本所在（运行根：.venv / data / logs / downloads）
+#   ..\source\   ← 代码根（run.py / core / web / tools）
+# 程序的数据目录默认按「代码位置」推算，所以这里用环境变量把它钉到 python\ 下，
+# 否则数据库/日志会跑到 source\data 里去。
+$ProjectRoot = $PSScriptRoot
+$SourceRoot = Join-Path (Split-Path -Parent $PSScriptRoot) 'source'
 Set-Location -Path $ProjectRoot
+
+$env:AD_DATA_DIR = Join-Path $ProjectRoot 'data'
+$env:AD_LOG_DIR = Join-Path $ProjectRoot 'logs'
+$env:AD_BUNDLED_DIR = Join-Path $ProjectRoot 'data\_pwt'
+# 下载目录：只在首次运行（还没有 settings.json）时给默认值，
+# 之后以界面设置为准 —— 否则环境变量会永久压住用户的选择。
+if (-not (Test-Path (Join-Path $ProjectRoot 'data\settings.json'))) {
+    $env:AD_DOWNLOAD_DIR = Join-Path $ProjectRoot 'downloads'
+}
 
 $python = Join-Path $ProjectRoot '.venv\Scripts\python.exe'
 if (-not (Test-Path -LiteralPath $python)) {
@@ -44,7 +58,7 @@ New-Item -ItemType Directory -Force -Path (Join-Path $ProjectRoot 'logs') | Out-
 Remove-Item $outLog, $errLog -Force -ErrorAction SilentlyContinue
 
 # 注意：项目路径含空格，run.py 的路径必须自带引号，否则会被拆成多个参数
-$runScript = Join-Path $ProjectRoot 'run.py'
+$runScript = Join-Path $SourceRoot 'run.py'
 $proc = Start-Process -FilePath $python -ArgumentList "`"$runScript`"" `
     -WorkingDirectory $ProjectRoot -WindowStyle Hidden `
     -RedirectStandardOutput $outLog -RedirectStandardError $errLog -PassThru

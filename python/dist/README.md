@@ -49,9 +49,9 @@ powershell -ExecutionPolicy Bypass -File python\后台启动.ps1
 powershell -ExecutionPolicy Bypass -File python\停止.ps1
 
 # 直接用解释器
-.venv\Scripts\python.exe run.py
-.venv\Scripts\python.exe run.py --port 9000 --no-browser
-.venv\Scripts\python.exe run.py --host 0.0.0.0        # 局域网可访问
+.venv\Scripts\python.exe ..\source\run.py
+.venv\Scripts\python.exe ..\source\run.py --port 9000 --no-browser
+.venv\Scripts\python.exe ..\source\run.py --host 0.0.0.0        # 局域网可访问
 ```
 
 ## 和另外两版的区别

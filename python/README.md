@@ -31,8 +31,8 @@ powershell -ExecutionPolicy Bypass -File python\后台启动.ps1
 powershell -ExecutionPolicy Bypass -File python\停止.ps1
 
 # 方式 3：直接用解释器
-.venv\Scripts\python.exe run.py
-.venv\Scripts\python.exe run.py --port 9000 --no-browser
+.venv\Scripts\python.exe ..\source\run.py
+.venv\Scripts\python.exe ..\source\run.py --port 9000 --no-browser
 ```
 
 ## Linux / macOS

@@ -24,9 +24,9 @@ SetCompressor /SOLID lzma
 !define UNINST_KEY      "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_ID}"
 
 ; PyInstaller 的 onedir 产物目录（相对本文件）
-!define SRCDIR          "..\dist\desktop\动漫下载机"
+!define SRCDIR          "dist\动漫下载机"
 ; 输出到 dist/desktop/
-!define OUTFILE         "..\dist\desktop\${APP_NAME}-${APP_VERSION}-Setup.exe"
+!define OUTFILE         "dist\${APP_NAME}-${APP_VERSION}-Setup.exe"
 
 Name "${APP_NAME} ${APP_VERSION}"
 OutFile "${OUTFILE}"
