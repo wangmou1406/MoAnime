@@ -1,25 +1,30 @@
-﻿# -*- coding: utf-8 -*-
-"""一键构建桌面版 + 安装包。
-
-用法（在项目根执行）：
-    powershell -ExecutionPolicy Bypass -File desktop\build.ps1
-
-三步：
-  1. PyInstaller 打包 Python 后端      -> dist\desktop\动漫下载机\backend\
-  2. dotnet 发布 System WebView 宿主    -> dist\desktop\动漫下载机\（根目录）
-  3. NSIS 打安装包                      -> dist\desktop\动漫下载机-<版本>-Setup.exe
-
-架构说明（System WebView 方案）：
-    宿主 AnimeDownloader.exe 只是个小壳子，界面靠**系统自带的 WebView2** 渲染，
-    不打包任何浏览器内核 —— 和 Tauri / Wails / Neutralino 一个思路。
-    Python 后端（Flask）负责全部业务逻辑，由宿主拉起、随窗口关闭而结束。
-
-参数：
-    -SkipBackend           跳过 PyInstaller（后端没改时省时间）
-    -SkipHost              跳过 dotnet 发布
-    -FrameworkDependent    宿主改为框架依赖发布（约 2MB，但目标机需装 .NET 8 桌面运行时）
-    -Makensis              指定 makensis 路径
-"""
+﻿# ============================================================================
+#  一键构建桌面版 + 安装包
+#
+#  用法（在项目根执行）：
+#      powershell -ExecutionPolicy Bypass -File desktop\build.ps1
+#
+#  三步：
+#    1. PyInstaller 打包 Python 后端   -> dist\desktop\动漫下载机\backend\
+#    2. dotnet 发布 System WebView 宿主 -> dist\desktop\动漫下载机\（根目录）
+#    3. NSIS 打安装包                   -> dist\desktop\动漫下载机-<版本>-Setup.exe
+#
+#  架构（System WebView 方案）：
+#      宿主 AnimeDownloader.exe 只是个小壳子，界面靠**系统自带的 WebView2** 渲染，
+#      不打包任何浏览器内核 —— 和 Tauri / Wails / Neutralino 一个思路。
+#      Python 后端（Flask）负责全部业务逻辑，由宿主拉起、随窗口关闭而结束。
+#
+#  参数：
+#      -SkipBackend          跳过 PyInstaller（后端没改时省时间）
+#      -SkipHost             跳过 dotnet 发布
+#      -FrameworkDependent   宿主改为框架依赖发布（约 2MB，但目标机需装 .NET 8）
+#      -Makensis             指定 makensis 路径
+#
+#  注意：param() 必须是脚本里第一条**语句**，前面只能有注释。
+#        早期版本在这里误放了 Python 的 """docstring"""，被 PowerShell 当成
+#        字符串表达式，导致 param 块变成命令调用、所有参数绑定失败
+#        （$Makensis 变 null，-SkipBackend 之类的开关全失效）。
+# ============================================================================
 param(
     [switch]$SkipBackend,
     [switch]$SkipHost,
@@ -29,6 +34,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
 
 $DesktopDir = $PSScriptRoot
 $ProjectRoot = Split-Path -Parent $DesktopDir
@@ -45,6 +51,9 @@ function Write-Step($msg) {
 
 if (-not (Test-Path -LiteralPath $Python)) {
     throw "找不到虚拟环境解释器：$Python`n请先运行 python\启动.bat 完成初始化。"
+}
+if ([string]::IsNullOrWhiteSpace($Makensis)) {
+    $Makensis = "$env:LOCALAPPDATA\ad-tools\nsis\nsis-3.11\makensis.exe"
 }
 
 # ---------------------------------------------------------------- 1) 后端

@@ -256,11 +256,31 @@ internal sealed class MainForm : Form
         Height = 880;
         MinimumSize = new Size(1024, 700);
         StartPosition = FormStartPosition.CenterScreen;
-        Icon = SystemIcons.Application;
+        Icon = LoadAppIcon();
 
         _webView.Dock = DockStyle.Fill;
         Controls.Add(_webView);
         Load += OnLoad;
+    }
+
+    /// <summary>
+    /// 窗口图标直接取 exe 自己嵌入的图标（csproj 的 ApplicationIcon）。
+    /// 这样任务栏、Alt+Tab、窗口左上角、快捷方式全部一致，
+    /// 不用再单独维护一份资源。
+    /// </summary>
+    private static Icon LoadAppIcon()
+    {
+        try
+        {
+            var exe = Environment.ProcessPath ?? Application.ExecutablePath;
+            var extracted = Icon.ExtractAssociatedIcon(exe);
+            if (extracted is not null) return extracted;
+        }
+        catch
+        {
+            // 取不到就用系统默认图标，不影响功能
+        }
+        return SystemIcons.Application;
     }
 
     private async void OnLoad(object? sender, EventArgs e)

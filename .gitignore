@@ -55,3 +55,6 @@ desktop/webview2-host/bin/
 desktop/webview2-host/obj/
 desktop/webview2-host/publish/
 data/webview2/
+# dist\ 既装产物也装三份说明；说明要进仓库，产物不进
+!dist/**/README.md
+data/_pyi/

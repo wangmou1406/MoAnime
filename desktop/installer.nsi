@@ -35,9 +35,18 @@ InstallDirRegKey HKCU "Software\${APP_ID}" "InstallDir"
 RequestExecutionLevel user      ; 按用户安装，不弹 UAC
 BrandingText "${APP_NAME_EN} ${APP_VERSION}"
 
+; ---------------- 图标 ----------------
+; app.ico 由 desktop\make_icon.py 生成（多尺寸：16~256）
+; Icon / UninstallIcon 决定 setup.exe Uninstall.exe 的文件图标；
+; MUI_ICON / MUI_UNICON 是安装向导里显示的图标。
+Icon "app.ico"
+UninstallIcon "app.ico"
+
 ; ---------------- 界面 ----------------
 !include "MUI2.nsh"
 !define MUI_ABORTWARNING
+!define MUI_ICON "app.ico"
+!define MUI_UNICON "app.ico"
 
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY

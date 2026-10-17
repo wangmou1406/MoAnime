@@ -31,6 +31,9 @@
     <FileVersion>3.1.0.0</FileVersion>
     <Product>动漫下载机 Anime Downloader</Product>
     <AssemblyTitle>动漫下载机</AssemblyTitle>
+    <!-- 应用图标：同时用于 exe 文件图标、任务栏、窗口左上角、快捷方式。
+         路径按**工程目录**解析，图标在 desktop\ 下，所以要写 ..\ -->
+    <ApplicationIcon>..\app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
