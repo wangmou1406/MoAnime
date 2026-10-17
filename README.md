@@ -66,6 +66,7 @@ Python + Flask 重写的动漫下载软件（Web 界面），参考了
 ├── tools/                   辅助脚本（自检、单测、依赖下载、缓存自检）
 ├── data/                    SQLite 数据库与 settings.json
 ├── data/_pwt/               内置浏览器内核 + 内置 Node + playwright-core（约 525 MB）
+├── dist/                    Docker 镜像归档（docker save 产物，不进版本库）
 ├── downloads/               默认下载目录
 └── logs/app.log             运行日志
 ```

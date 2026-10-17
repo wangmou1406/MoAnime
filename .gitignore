@@ -42,5 +42,6 @@ tools/*.dll
 docker-data/
 # 本机的 compose 变量（含你自己的磁盘路径），不要提交；模板是 .env.example
 .env
+dist/
 anime-downloader-*.tar
 anime-downloader-*.tar.sha256
