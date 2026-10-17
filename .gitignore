@@ -45,3 +45,7 @@ docker-data/
 dist/
 anime-downloader-*.tar
 anime-downloader-*.tar.sha256
+
+data/browser-profile/
+
+data/logs/

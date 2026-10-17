@@ -1,13 +1,16 @@
-# ============================================================
+﻿# ============================================================
 #  动漫下载机 后台启动：服务在后台常驻，关掉本窗口也继续运行
 #  用法：powershell -ExecutionPolicy Bypass -File 后台启动.ps1
 #  停止：powershell -ExecutionPolicy Bypass -File 停止.ps1
 # ============================================================
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-Set-Location -Path $PSScriptRoot
 
-$python = Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
+# 脚本位于 python\ 子目录，项目根是它的上一级（.venv / run.py / data 都在那里）
+$ProjectRoot = Split-Path -Parent $PSScriptRoot
+Set-Location -Path $ProjectRoot
+
+$python = Join-Path $ProjectRoot '.venv\Scripts\python.exe'
 if (-not (Test-Path -LiteralPath $python)) {
     Write-Host "没有找到 .venv，请先双击 启动.bat 完成初始化。" -ForegroundColor Red
     Read-Host "按回车键退出"
@@ -30,9 +33,9 @@ if ($listening) {
     exit 0
 }
 
-$outLog = Join-Path $PSScriptRoot 'logs\service.out.log'
-$errLog = Join-Path $PSScriptRoot 'logs\service.err.log'
-New-Item -ItemType Directory -Force -Path (Join-Path $PSScriptRoot 'logs') | Out-Null
+$outLog = Join-Path $ProjectRoot 'logs\service.out.log'
+$errLog = Join-Path $ProjectRoot 'logs\service.err.log'
+New-Item -ItemType Directory -Force -Path (Join-Path $ProjectRoot 'logs') | Out-Null
 
 # 这两个文件装的是「本次运行」的原始 stdout / stderr，**没有轮转**，
 # 程序一直跑就会一直涨（实测曾一天涨到 750 MB）。
@@ -41,9 +44,9 @@ New-Item -ItemType Directory -Force -Path (Join-Path $PSScriptRoot 'logs') | Out
 Remove-Item $outLog, $errLog -Force -ErrorAction SilentlyContinue
 
 # 注意：项目路径含空格，run.py 的路径必须自带引号，否则会被拆成多个参数
-$runScript = Join-Path $PSScriptRoot 'run.py'
+$runScript = Join-Path $ProjectRoot 'run.py'
 $proc = Start-Process -FilePath $python -ArgumentList "`"$runScript`"" `
-    -WorkingDirectory $PSScriptRoot -WindowStyle Hidden `
+    -WorkingDirectory $ProjectRoot -WindowStyle Hidden `
     -RedirectStandardOutput $outLog -RedirectStandardError $errLog -PassThru
 
 Start-Sleep -Seconds 6

@@ -1,12 +1,15 @@
-﻿  ============================================================
-   动漫下载机 启动器
-   用法： 双击 启动.bat   或   powershell -ExecutionPolicy Bypass -File launcher.ps1
-   可选参数： --port 9000  --host 0.0.0.0  --no-browser
-  ============================================================
+﻿  # ============================================================
+   # 动漫下载机 启动器
+   # 用法： 双击 启动.bat   或   powershell -ExecutionPolicy Bypass -File launcher.ps1
+   # 可选参数： --port 9000  --host 0.0.0.0  --no-browser
+  # ============================================================
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+# 脚本位于 python\ 子目录，项目根是它的上一级（.venv / run.py / data 都在那里）
+$ProjectRoot = Split-Path -Parent $PSScriptRoot
+Set-Location -Path $ProjectRoot
 $OutputEncoding = [System.Text.Encoding]::UTF8
-Set-Location -Path $PSScriptRoot
 
 function Write-Title {
     Write-Host "============================================================" -ForegroundColor DarkCyan
@@ -15,7 +18,7 @@ function Write-Title {
     Write-Host ""
 }
 
-  判断某个 python.exe 是否可用且版本 >= 3.10
+  # 判断某个 python.exe 是否可用且版本 >= 3.10
 function Test-PythonExe {
     param([string]$Exe)
     if (-not $Exe) { return $false }
@@ -27,7 +30,7 @@ function Test-PythonExe {
     } catch { return $false }
 }
 
-  依赖是否齐全
+  # 依赖是否齐全
 function Test-Dependencies {
     param([string]$Exe)
     try {
@@ -38,10 +41,10 @@ function Test-Dependencies {
 
 Write-Title
 
-$venvPython = Join-Path $PSScriptRoot '.venv\Scripts\python.exe'
+$venvPython = Join-Path $ProjectRoot '.venv\Scripts\python.exe'
 $python = $null
 
-  ---------------- 1) 优先使用项目自带的虚拟环境 ----------------
+  # ---------------- 1) 优先使用项目自带的虚拟环境 ----------------
 if (Test-PythonExe $venvPython) {
     if (Test-Dependencies $venvPython) {
         $python = $venvPython
@@ -58,12 +61,12 @@ if (Test-PythonExe $venvPython) {
     }
 }
 
-  ---------------- 2) 没有虚拟环境时，自动探测可用的 Python ----------------
+  # ---------------- 2) 没有虚拟环境时，自动探测可用的 Python ----------------
 if (-not $python) {
     Write-Host "[1/2] 未找到可用的 .venv，正在查找系统 Python ..." -ForegroundColor Yellow
     $candidates = @()
 
-      2.1 py 启动器
+      # 2.1 py 启动器
     if (Get-Command py -ErrorAction SilentlyContinue) {
         try {
             $found = & py -3 -c "import sys;print(sys.executable)" 2>$null
@@ -71,12 +74,12 @@ if (-not $python) {
         } catch { }
     }
 
-      2.2 PATH 里的 python（跳过微软商店占位程序）
+      # 2.2 PATH 里的 python（跳过微软商店占位程序）
     Get-Command python -All -ErrorAction SilentlyContinue |
         Where-Object { $_.Source -and $_.Source -notlike '*WindowsApps*' } |
         ForEach-Object { $candidates += $_.Source }
 
-      2.3 常见安装位置
+      # 2.3 常见安装位置
     foreach ($ver in @('314', '313', '312', '311', '310')) {
         $candidates += (Join-Path $env:LOCALAPPDATA "Programs\Python\Python$ver\python.exe")
         $candidates += "C:\Python$ver\python.exe"
@@ -88,7 +91,7 @@ if (-not $python) {
     }
 }
 
-  ---------------- 3) 仍然找不到：给出明确的解决办法 ----------------
+  # ---------------- 3) 仍然找不到：给出明确的解决办法 ----------------
 if (-not $python) {
     Write-Host ""
     Write-Host "  没有找到可用的 Python 3.10+，本目录里也没有可用的 .venv。" -ForegroundColor Red
@@ -107,7 +110,7 @@ if (-not $python) {
 
 Write-Host "      Python：$python"
 
-  ---------------- 4) 已经在运行就不再重复启动 ----------------
+  # ---------------- 4) 已经在运行就不再重复启动 ----------------
 function Test-PortListening {
     param([int]$Port)
     try {
@@ -131,7 +134,7 @@ if (Test-PortListening $port) {
     exit 0
 }
 
-  ---------------- 5) 首次运行：建虚拟环境 + 装依赖 ----------------
+  # ---------------- 5) 首次运行：建虚拟环境 + 装依赖 ----------------
 if (-not (Test-Path -LiteralPath $venvPython)) {
     Write-Host "[1/2] 创建虚拟环境并安装依赖（首次较慢，请耐心等待）..." -ForegroundColor Yellow
     & $python -m venv '.venv'
@@ -148,7 +151,7 @@ if (-not (Test-Path -LiteralPath $venvPython)) {
     $python = $venvPython
 }
 
-  ---------------- 5) ffmpeg 提示 ----------------
+  # ---------------- 5) ffmpeg 提示 ----------------
 if (-not (Test-Path -LiteralPath 'tools\ffmpeg.exe') -and -not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
     Write-Host "[提示] 未检测到 ffmpeg：HLS 分片会直接拼接为 .ts 文件" -ForegroundColor Yellow
     Write-Host "       想要标准 mp4 时，可在网页「设置 - 外部依赖」一键下载安装"

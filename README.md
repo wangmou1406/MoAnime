@@ -128,23 +128,48 @@ Python + Flask 重写的动漫下载软件（Web 界面），参考了
 
 ## 二、快速开始
 
-### 方式 1：双击 `启动.bat`（推荐）
-启动器会自动完成：检测可用的 Python → 使用/创建 `.venv` → 安装依赖 → 启动服务 → 打开浏览器。
+本项目有**三种交付形态**，各自一个文件夹：
+
+```
+MoAnime/
+├── docker/    Docker 版（镜像自带 ffmpeg + Chromium 内核，适合 NAS/服务器）
+├── python/    Python 版（.venv 直接跑，适合改代码/调试）
+├── desktop/   桌面版（双击即用的 exe + 安装包，适合普通用户）
+└── core/ web/ static/ sources/ tools/ ...   ← 三版共用的同一份源码
+```
+
+> 三版**共用一份源码**，只是启动方式和打包方式不同；这样修 bug 不用改三遍。
+> 各文件夹里都有自己的 `README.md` 详细说明。
+
+### 桌面版（普通用户推荐）
+
+```powershell
+powershell -ExecutionPolicy Bypass -File desktop\build.ps1
+```
+
+产出免安装版 `dist\desktop\动漫下载机\` 和安装包 `dist\desktop\动漫下载机-3.1.0-Setup.exe`。
+安装包**按用户安装到 `%LOCALAPPDATA%\Programs`，不需要管理员权限**，自带卸载程序。
+双击后用**自带的应用窗口**打开，不用自己开浏览器。
+
+详见 [desktop/README.md](desktop/README.md)。
+
+### 方式 1：双击 `python\启动.bat`（Python 版推荐）
+启动器会自动完成：检测可用的 Python → 使用/创建 `.venv` → 安装依赖 → 启动服务。
 **不要求**你先装好 Python 或配置 PATH：只要 `.venv` 目录存在就直接复用它。
 **这个黑窗口要一直开着**，关掉窗口 = 停止服务。
 
 ### 方式 2：后台常驻（关掉窗口也继续跑）
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\后台启动.ps1   # 后台启动（隐藏窗口）
-powershell -ExecutionPolicy Bypass -File .\停止.ps1       # 停止服务
+powershell -ExecutionPolicy Bypass -File python\后台启动.ps1   # 后台启动（隐藏窗口）
+powershell -ExecutionPolicy Bypass -File python\停止.ps1       # 停止服务
 ```
 后台模式的日志写到 `logs/service.err.log`；`停止.ps1` 会先确认端口上的进程确实是 MoAnime
 （按命令行判断），再结束它。
 
 ### 方式 3：PowerShell 启动器（前台）
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\launcher.ps1
-powershell -ExecutionPolicy Bypass -File .\launcher.ps1 --port 9000 --no-browser
+powershell -ExecutionPolicy Bypass -File python\launcher.ps1
+powershell -ExecutionPolicy Bypass -File python\launcher.ps1 --port 9000 --no-browser
 ```
 
 ### 方式 4：直接用虚拟环境的解释器
@@ -161,6 +186,11 @@ cd "C:\Users\luoji\Desktop\项目文件\DeepSeek Harness\软件\MoAnime"
 
 ### 方式 5：Docker（镜像已内置 ffmpeg + Chromium 内核）
 
+```bash
+cd docker
+docker compose up -d --build
+```
+
 镜像基于 `python:3.12-slim`，**开箱自带三样东西**，宿主机不需要装任何依赖：
 
 | 内置内容 | 版本（实测构建） | 用途 |
@@ -173,12 +203,10 @@ cd "C:\Users\luoji\Desktop\项目文件\DeepSeek Harness\软件\MoAnime"
 放进去会被卷遮住。程序通过 `AD_BUNDLED_DIR=/opt/pwt` 找到它们
 （`core/browser_resolver.py` 会识别成「内置内核」）。
 
-```bash
-# 一条命令起（数据落在当前目录）
-docker compose up -d --build
+不用 compose 也可以（注意构建上下文是项目根）：
 
-# 或者不用 compose
-docker build -t anime-downloader:latest .
+```bash
+docker build -t anime-downloader:latest -f docker/Dockerfile .
 docker run -d --name anime-downloader \
   -p 8848:8848 \
   -v "$PWD/docker-data:/data" \
@@ -188,7 +216,9 @@ docker run -d --name anime-downloader \
   anime-downloader:latest
 ```
 
-打开 <http://localhost:8848> 即可。常用命令：
+详见 [docker/README.md](docker/README.md)。
+
+打开 <http://localhost:8848> 即可。常用命令（在 `docker/` 目录下执行）：
 
 ```bash
 docker compose logs -f          # 看日志
@@ -203,6 +233,7 @@ docker compose up -d --build    # 改完代码重新构建
 ```bash
 docker compose build --build-arg PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright
 # 或写进 docker-compose.yml 的 build.args（文件里已有注释掉的示例）
+
 ```
 
 **下载路径怎么改（三种方式，任选一种）**

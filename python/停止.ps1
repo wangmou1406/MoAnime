@@ -4,7 +4,10 @@
 # ============================================================
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-Set-Location -Path $PSScriptRoot
+
+# 脚本位于 python\ 子目录，项目根是它的上一级（.venv / run.py / data 都在那里）
+$ProjectRoot = Split-Path -Parent $PSScriptRoot
+Set-Location -Path $ProjectRoot
 
 $port = 8848
 try {
@@ -26,7 +29,7 @@ try {
     $cmdline = (Get-CimInstance Win32_Process -Filter "ProcessId=$pid0" -ErrorAction SilentlyContinue).CommandLine
     if (-not $cmdline) { $cmdline = "" }
 } catch { }
-$isMoanime = ($cmdline -like "*$PSScriptRoot*") -or ($cmdline -like '*run.py*')
+$isMoanime = ($cmdline -like "*$ProjectRoot*") -or ($cmdline -like '*run.py*')
 
 Write-Host "发现监听 $port 的进程：PID $pid0"
 if ($cmdline) {
