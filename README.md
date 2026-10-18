@@ -1,16 +1,10 @@
 # 动漫下载机 · Anime Downloader
 
-[![CI](https://github.com/USER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/USER/REPO/actions/workflows/ci.yml)
+[![CI](https://github.com/wangmou1406/MoAnime/actions/workflows/ci.yml/badge.svg)](https://github.com/wangmou1406/MoAnime/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab?logo=python&logoColor=white)](https://www.python.org/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20Docker-6b7280)](#平台兼容性)
 [![Version](https://img.shields.io/badge/Version-3.1.0-22c55e)](CHANGELOG.md)
-
-<!-- ============================================================
-     发布前请把下面两处 USER/REPO 改成你的 GitHub 用户名和仓库名，
-     否则 CI 徽章是坏的（会显示 unknown）。
-     例：github.com/yourname/anime-downloader
-     ============================================================ -->
 
 > A self-hosted anime **search & download** client with a web UI.
 > Multiple pluggable sources, HLS → MP4 remux, subtitle fetching,
