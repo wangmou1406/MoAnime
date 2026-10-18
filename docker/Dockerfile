@@ -22,6 +22,15 @@ LABEL org.opencontainers.image.title="Anime Downloader" \
 ARG NODE_VERSION=22.11.0
 ARG PLAYWRIGHT_VERSION=1.64.1
 
+# 国内加速（均可选，默认走官方源；构建时用 --build-arg 覆盖）：
+#   APT_MIRROR          apt 源域名（不含协议），如 mirrors.ustc.edu.cn/debian
+#                       （自动替换 deb.debian.org 为该值、security.debian.org 为该值-security）
+#   PIP_INDEX_URL       pip 源，如 https://pypi.tuna.tsinghua.edu.cn/simple
+#   NODE_DOWNLOAD_HOST  nodejs.org 的镜像，如 https://cdn.npmmirror.com/binaries/node
+ARG APT_MIRROR=
+ARG PIP_INDEX_URL=
+ARG NODE_DOWNLOAD_HOST=
+
 # Chromium 下载源。默认走 Playwright 官方 CDN；
 # 国内网络慢的话可以换成镜像（目录结构与官方一致）：
 #   docker build --build-arg PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright .
@@ -43,7 +52,11 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # libglib2.0-0/libgl1: opencv 依赖
 # fonts-noto-cjk     : 浏览器渲染中文（缺字体页面会显示成方块，影响取流判断）
 # 其余 libnss3 等    : Chromium 的运行库
-RUN apt-get update \
+RUN if [ -n "$APT_MIRROR" ]; then \
+      sed -i "s|deb.debian.org|${APT_MIRROR}|g; s|security.debian.org|${APT_MIRROR}-security|g" \
+        /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list 2>/dev/null || true; \
+    fi \
+ && apt-get update \
  && apt-get install -y --no-install-recommends \
       ffmpeg \
       p7zip-full \
@@ -83,7 +96,7 @@ ENV AD_BUNDLED_DIR=/opt/pwt \
 
 # Node.js 运行时（官方 Linux x64 压缩包，解出来是 node/bin/node）
 RUN mkdir -p /opt/pwt/node \
- && curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" \
+ && curl -fsSL "${NODE_DOWNLOAD_HOST:-https://nodejs.org/dist}/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" \
     | tar -xJ --strip-components=1 -C /opt/pwt/node \
  && /opt/pwt/node/bin/node --version
 
@@ -106,7 +119,11 @@ RUN set -eux; \
 # ---------------------------------------------------------------- Python 依赖
 WORKDIR /app
 COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+RUN if [ -n "$PIP_INDEX_URL" ]; then \
+      pip install --no-cache-dir --index-url "$PIP_INDEX_URL" -r /app/requirements.txt; \
+    else \
+      pip install --no-cache-dir -r /app/requirements.txt; \
+    fi
 
 # ---------------------------------------------------------------- 应用代码
 # 注意 .dockerignore 已排除 data/ downloads/ logs/ .venv/ 与 tools/ffmpeg.exe，
