@@ -26,9 +26,11 @@ ARG PLAYWRIGHT_VERSION=1.64.1
 #   APT_MIRROR          apt 镜像域名（不含协议、不含 /debian 路径），如 mirrors.ustc.edu.cn
 #                       （自动把 deb.debian.org 换成 <域名>/debian、security.debian.org 换成 <域名>/debian-security）
 #   PIP_INDEX_URL       pip 源，如 https://pypi.tuna.tsinghua.edu.cn/simple
+#   NPM_REGISTRY        npm registry，如 https://registry.npmmirror.com
 #   NODE_DOWNLOAD_HOST  nodejs.org 的镜像，如 https://cdn.npmmirror.com/binaries/node
 ARG APT_MIRROR=
 ARG PIP_INDEX_URL=
+ARG NPM_REGISTRY=
 ARG NODE_DOWNLOAD_HOST=
 
 # Chromium 下载源。默认走 Playwright 官方 CDN；
@@ -109,7 +111,9 @@ ENV PATH=/opt/pwt/node/bin:$PATH \
 RUN set -eux; \
     cd /opt/pwt; \
     /opt/pwt/node/bin/npm init -y >/dev/null 2>&1; \
-    /opt/pwt/node/bin/npm install --no-audit --no-fund "playwright-core@${PLAYWRIGHT_VERSION}"; \
+    /opt/pwt/node/bin/npm install --no-audit --no-fund \
+      --registry="${NPM_REGISTRY:-https://registry.npmjs.org}" \
+      "playwright-core@${PLAYWRIGHT_VERSION}"; \
     /opt/pwt/node/bin/node /opt/pwt/node_modules/playwright-core/cli.js install --no-shell chromium; \
     rm -rf /root/.npm /tmp/playwright*; \
     rm -rf /opt/pwt/browsers/ffmpeg-*; \
