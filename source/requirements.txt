@@ -8,7 +8,7 @@ simple-websocket>=1.0
 requests>=2.31
 beautifulsoup4>=4.12
 lxml>=5.0
-m3u8>=4.0
+m3u8>=6.0.0
 pycryptodome>=3.20
 tqdm>=4.66
 
