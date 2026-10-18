@@ -23,8 +23,8 @@ ARG NODE_VERSION=22.11.0
 ARG PLAYWRIGHT_VERSION=1.64.1
 
 # 国内加速（均可选，默认走官方源；构建时用 --build-arg 覆盖）：
-#   APT_MIRROR          apt 源域名（不含协议），如 mirrors.ustc.edu.cn/debian
-#                       （自动替换 deb.debian.org 为该值、security.debian.org 为该值-security）
+#   APT_MIRROR          apt 镜像域名（不含协议、不含 /debian 路径），如 mirrors.ustc.edu.cn
+#                       （自动把 deb.debian.org 换成 <域名>/debian、security.debian.org 换成 <域名>/debian-security）
 #   PIP_INDEX_URL       pip 源，如 https://pypi.tuna.tsinghua.edu.cn/simple
 #   NODE_DOWNLOAD_HOST  nodejs.org 的镜像，如 https://cdn.npmmirror.com/binaries/node
 ARG APT_MIRROR=
@@ -53,7 +53,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # fonts-noto-cjk     : 浏览器渲染中文（缺字体页面会显示成方块，影响取流判断）
 # 其余 libnss3 等    : Chromium 的运行库
 RUN if [ -n "$APT_MIRROR" ]; then \
-      sed -i "s|deb.debian.org|${APT_MIRROR}|g; s|security.debian.org|${APT_MIRROR}-security|g" \
+      sed -i "s|deb.debian.org|${APT_MIRROR}|g; s|security.debian.org|${APT_MIRROR}/debian-security|g" \
         /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list 2>/dev/null || true; \
     fi \
  && apt-get update \
