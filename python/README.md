@@ -82,9 +82,9 @@ pip install -r requirements.txt → 完成
 python run.py --port 8899      → 2 秒就绪
 GET /                          → HTTP 200，47795 bytes
 GET /api/sources               → 13 个源（11 启用）
-检索「海贼」                    → 命中 20 条 → 解析 1180 集
-下载 海贼王 第01集              → 进度 0 → 10.6%（60 秒）
-分片                           → /app/downloads/.tmp/海贼王_第01集/seg_*.ts
+检索「示例」                    → 命中 20 条 → 解析 1180 集
+下载 示例番 第01集              → 进度 0 → 10.6%（60 秒）
+分片                           → /app/downloads/.tmp/示例番_第01集/seg_*.ts
 清晰度                         → 1080x608
 ```
 
