@@ -276,6 +276,55 @@ cd "C:\Users\luoji\Desktop\项目文件\DeepSeek Harness\软件\MoAnime"
 
 ### 方式 5：Docker（镜像已内置 ffmpeg + Chromium 内核）
 
+**直接用现成镜像（推荐，免构建）**——镜像已发布到 GitHub Container Registry
+（`ghcr.io/wangmou1406/moanime`），写一个 `docker-compose.yml` 再 `docker compose up -d` 即可：
+
+```yaml
+# docker-compose.yml
+services:
+  anime-downloader:
+    image: ghcr.io/wangmou1406/moanime:3.1.0
+    container_name: anime-downloader
+    restart: unless-stopped
+    ports:
+      - "8848:8848"
+    volumes:
+      - ./docker-data:/data
+      - ./downloads:/downloads
+    environment:
+      AD_DATA_DIR: /data
+      AD_LOG_DIR: /data/logs
+      AD_DOWNLOAD_DIR: /downloads
+      AD_HOST: 0.0.0.0
+      AD_PORT: "8848"
+    shm_size: "1gb"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8848/api/meta"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+```
+
+```bash
+docker compose up -d     # 拉取 ghcr.io/wangmou1406/moanime:3.1.0 并启动
+```
+
+不想用 compose 也可以直接拉镜像跑：
+
+```bash
+docker pull ghcr.io/wangmou1406/moanime:3.1.0
+docker run -d --name anime-downloader \
+  -p 8848:8848 \
+  -v "$PWD/docker-data:/data" \
+  -v "$PWD/downloads:/downloads" \
+  -v /dev/shm:/dev/shm \
+  --restart unless-stopped \
+  ghcr.io/wangmou1406/moanime:3.1.0
+```
+
+以下是从源码自己构建的方式（会重新拉 Chromium，国内可能慢，见下方「国内加速」）：
+
 ```bash
 cd docker
 docker compose up -d --build
