@@ -25,6 +25,8 @@ jobs:
     defaults:
       run:
         shell: bash
+    env:
+      PYTHONIOENCODING: utf-8
     steps:
       - uses: actions/checkout@v4
 

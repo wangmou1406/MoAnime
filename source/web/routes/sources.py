@@ -379,6 +379,8 @@ def detect_source():
     except Exception as exc:  # noqa: BLE001
         logger.error("自动探测失败：%s", exc, exc_info=True)
         return fail("自动探测失败：%s" % exc, 500)
+    if not report.get("ok"):
+        return fail(report.get("error") or "自动探测失败", 502)
     return ok(report)
 
 

@@ -8,10 +8,12 @@
 用法： python tools/selftest.py [端口] [--download]
   --download  额外执行一次真实下载验证（较慢，约 1~3 分钟）
 """
+import http.server
 import json
 import os
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -24,6 +26,37 @@ DO_DOWNLOAD = "--download" in sys.argv
 HOST = "http://127.0.0.1:%d" % PORT
 
 PASS, FAIL = [], []
+
+# 自动探测用的本地夹具页：含检索表单 + 结果列表容器 + 剧集链接，
+# 让「自动探测」用例不依赖外部站点，可重复、可确定。
+FIXTURE_HTML = """<!DOCTYPE html>
+<html><head><title>探测测试站</title></head>
+<body>
+<form action="/search" method="get"><input name="wd" type="text"><button type="submit">搜索</button></form>
+<div class="vodlist">
+  <a href="/anime/1" title="测试番剧一"><img data-src="/img/1.jpg"></a>
+  <a href="/anime/2" title="测试番剧二"><img data-src="/img/2.jpg"></a>
+  <a href="/anime/3" title="测试番剧三"><img data-src="/img/3.jpg"></a>
+</div>
+<a href="/play/1/1">第1集</a>
+<a href="/play/1/2">第2集</a>
+<a href="/play/1/3">第3集</a>
+<a href="/play/1/4">第4集</a>
+</body></html>
+"""
+
+
+class _FixtureHandler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        body = FIXTURE_HTML.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *args):
+        pass
 
 
 def request(path, method="GET", payload=None, timeout=180):
@@ -265,11 +298,22 @@ def main():
                                       stats["data"]["sources_enabled"]))
 
         print("\n== 9. 自动探测 ==")
-        detect = request("/api/sources/detect", "POST", {"url": "https://www.agedm.io"})
-        check("自动探测接口", detect.get("ok") and detect["data"].get("config"),
-              str(detect.get("error") or ("结果容器=%s 剧集规则=%s" % (
-                  detect["data"].get("search", {}).get("item", ""),
-                  detect["data"].get("episodes", {}).get("item", ""))))[:88])
+        # 探测本地夹具页：不依赖外部站点，保证可重复执行
+        fixture = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _FixtureHandler)
+        threading.Thread(target=fixture.serve_forever, daemon=True).start()
+        fixture_port = fixture.server_address[1]
+        try:
+            detect = request("/api/sources/detect", "POST",
+                             {"url": "http://127.0.0.1:%d/" % fixture_port})
+            search_item = detect.get("data", {}).get("search", {}).get("item", "") \
+                if detect.get("ok") else ""
+            ep_item = detect.get("data", {}).get("episodes", {}).get("item", "") \
+                if detect.get("ok") else ""
+            check("自动探测接口",
+                  detect.get("ok") and bool(search_item) and bool(ep_item),
+                  str(detect.get("error") or ("结果容器=%s 剧集规则=%s" % (search_item, ep_item)))[:88])
+        finally:
+            fixture.shutdown()
 
         print("\n== 10. 导出 / 导入 ==")
         exported = request("/api/sources/export?include_builtin=1")
