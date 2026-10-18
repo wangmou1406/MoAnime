@@ -3,7 +3,7 @@
 # Docker 构建时会自动执行这一步
 
 Flask>=3.0
-Flask-SocketIO>=5.3
+Flask-SocketIO>=5.7.0
 simple-websocket>=1.0
 requests>=2.31
 beautifulsoup4>=4.12
