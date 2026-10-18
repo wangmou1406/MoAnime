@@ -9,7 +9,7 @@ requests>=2.31
 beautifulsoup4>=4.12
 lxml>=5.0
 m3u8>=4.0
-pycryptodome>=3.20
+pycryptodome>=4.0.0
 tqdm>=4.66
 
 # 「文字广告体检」用的画面 OCR（识别片头/片中烧进画面的字幕广告）。
