@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: 先看文档
-    url: https://github.com/USER/REPO#readme
-    about: 安装、配置源、改下载位置、常见报错，README 里基本都有（发布前请把 USER/REPO 换成真实仓库）
+    url: https://github.com/wangmou1406/MoAnime#readme
+    about: 安装、配置源、改下载位置、常见报错，README 里基本都有
   - name: 安全问题请走私密渠道
-    url: https://github.com/USER/REPO/security/advisories/new
-    about: 涉及凭据泄露、任意文件写入等，请不要开公开 Issue（发布前同样替换 USER/REPO）
+    url: https://github.com/wangmou1406/MoAnime/security/advisories/new
+    about: 涉及凭据泄露、任意文件写入等，请不要开公开 Issue

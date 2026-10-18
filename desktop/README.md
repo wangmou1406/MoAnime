@@ -67,7 +67,7 @@ desktop\dist\动漫下载机-3.1.0-Setup.exe ← 安装包（约 342 MB）
 
 ## 安装包做了什么
 
-* **按用户安装**到 `%LOCALAPPDATA%\Programs\AnimeDownloader`，**不需要管理员权限**
+* 装到 `C:\Program Files\AnimeDownloader`，安装时会要一次管理员权限
   （装 Program Files 会写不了数据目录）
 * 桌面 + 开始菜单快捷方式，指向 `AnimeDownloader.exe`
 * 注册到「应用和功能」，带卸载程序

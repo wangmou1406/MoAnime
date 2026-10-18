@@ -17,7 +17,7 @@
 双击 `动漫下载机-3.1.0-Setup.exe` →
 按向导装完 → 桌面/开始菜单出现「动漫下载机」→ 双击打开。
 
-* **按用户安装**到 `%LOCALAPPDATA%\Programs\AnimeDownloader`，**不需要管理员权限**
+* 装到 `C:\Program Files\AnimeDownloader`，安装时会要一次管理员权限
 * 自带卸载程序（「设置 → 应用」里也能卸载）
 * 卸载时会单独问是否删除用户数据，**已下载的视频不会动**
 
