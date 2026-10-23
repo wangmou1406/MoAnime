@@ -445,9 +445,15 @@ views.taskRow = function (t) {
   const progress = Math.max(0, Math.min(100, Number(t.progress || 0)));
   const barClass = t.status === 'completed' ? 'done'
     : (['failed', 'canceled'].includes(t.status) ? 'fail' : '');
+  // 剩余时间：仅对进行中、知道自己总共多少字节、且速度大于 0 的任务显示
+  const remainBytes = (Number(t.total_bytes) || 0) - (Number(t.done_bytes) || 0);
+  const eta = (running && remainBytes > 0 && Number(t.speed) > 0)
+    ? fmtEtaShort(remainBytes / Number(t.speed)) : '';
   const detail = running && t.segments_total
     ? `${t.segments_done}/${t.segments_total} 分片 · ${fmtSpeed(t.speed)}`
     : `${fmtSize(t.done_bytes)}${t.total_bytes ? ' / ' + fmtSize(t.total_bytes) : ''}`;
+  // 剩余时间放右边、和百分比一起：左列放不下会折行，右边短得多
+  const rightText = `${eta ? '剩 ' + eta + ' · ' : ''}${progress.toFixed(0)}%`;
   // 中列已经有一个状态徽标了，这里只在 message 带来新信息时才显示，
   // 避免同一行出现两次"下载中"、两次分片计数（评审指出过这个噪音）
   const msg = String(t.message || '').trim();
@@ -467,7 +473,7 @@ views.taskRow = function (t) {
           ${redundant ? '' : `<div class="ep" data-role="msg" title="${esc(msg)}">${esc(msg.slice(0, 34))}</div>`}
         </div>
         <div>
-          <div class="status-line"><span>${detail}</span><span>${progress.toFixed(0)}%</span></div>
+          <div class="status-line"><span>${detail}</span><span>${rightText}</span></div>
           <div class="bar ${barClass}"><i style="width:${progress}%"></i></div>
           ${t.error ? `<div class="ep" style="color:var(--amber)" title="${esc(t.error)}">
             ${esc(String(t.error).slice(0, 52))}</div>` : ''}
@@ -532,9 +538,13 @@ views.updateTaskRows = function (tasks) {
     const el = byId.get(String(t.id));
     const progress = Math.max(0, Math.min(100, Number(t.progress || 0)));
     const running = t.status === 'running';
+    const remainBytes = (Number(t.total_bytes) || 0) - (Number(t.done_bytes) || 0);
+    const eta = (running && remainBytes > 0 && Number(t.speed) > 0)
+      ? fmtEtaShort(remainBytes / Number(t.speed)) : '';
     const detail = running && t.segments_total
       ? `${t.segments_done}/${t.segments_total} 分片 · ${fmtSpeed(t.speed)}`
       : `${fmtSize(t.done_bytes)}${t.total_bytes ? ' / ' + fmtSize(t.total_bytes) : ''}`;
+    const rightText = `${eta ? '剩 ' + eta + ' · ' : ''}${progress.toFixed(0)}%`;
     const bar = el.querySelector('.bar');
     const fill = bar && bar.querySelector('i');
     if (fill) {
@@ -546,8 +556,7 @@ views.updateTaskRows = function (tasks) {
       const left = line.children[0];
       const right = line.children[1];
       if (left.textContent !== detail) left.textContent = detail;
-      const pct = progress.toFixed(0) + '%';
-      if (right.textContent !== pct) right.textContent = pct;
+      if (right.textContent !== rightText) right.textContent = rightText;
     }
     // 中列的消息（分片进度等）也是易变内容，按需原地更新，不靠重建
     const msgBox = el.querySelector('.ep[data-role="msg"]');

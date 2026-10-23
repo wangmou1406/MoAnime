@@ -301,6 +301,23 @@
 
       <div class="card"><div class="stat-strip" id="task-stats"></div></div>
 
+      <!-- 下载速度曲线 + 预估剩余时间 -->
+      <div class="card speed-card">
+        <div class="card-head">
+          <h3><i class="bi bi-graph-up"></i> 下载速度</h3>
+          <span class="text-dim" id="speed-now" style="font-size:12px">—</span>
+          <div class="spacer"></div>
+          <span class="text-dim" id="speed-eta" style="font-size:12px">—</span>
+        </div>
+        <div class="card-body speed-body">
+          <canvas id="speed-chart" height="64"></canvas>
+          <div class="speed-axis">
+            <span id="speed-scale">—</span>
+            <span>最近 60 秒</span>
+          </div>
+        </div>
+      </div>
+
       <div class="card">
         <div class="card-head">
           <h3><i class="bi bi-list-check"></i> 任务列表</h3>

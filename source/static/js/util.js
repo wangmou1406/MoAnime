@@ -19,6 +19,30 @@ function fmtSize(bytes) {
 
 const fmtSpeed = (bps) => (bps ? `${fmtSize(bps)}/s` : '--');
 
+/** 秒数 → 「1 小时 2 分」/「3 分 12 秒」/「8 秒」。算不出来返回 '--'。 */
+function fmtEta(seconds) {
+  const value = Number(seconds);
+  if (!Number.isFinite(value) || value <= 0) return '--';
+  const total = Math.round(value);
+  if (total < 60) return `${total} 秒`;
+  if (total < 3600) return `${Math.floor(total / 60)} 分 ${total % 60} 秒`;
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  return `${hours} 小时 ${minutes} 分`;
+}
+
+/** 紧凑版：14:02 / 1:02:15。任务行空间窄，用这个避免换行。 */
+function fmtEtaShort(seconds) {
+  const value = Number(seconds);
+  if (!Number.isFinite(value) || value <= 0) return '--';
+  const total = Math.round(value);
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+  const pad = (n) => String(n).padStart(2, '0');
+  return hours ? `${hours}:${pad(minutes)}:${pad(secs)}` : `${minutes}:${pad(secs)}`;
+}
+
 function fmtTime(ts) {
   if (!ts) return '--';
   if (typeof ts === 'number') return new Date(ts * 1000).toLocaleString('zh-CN', { hour12: false });

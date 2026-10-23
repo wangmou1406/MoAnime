@@ -222,6 +222,7 @@ async function refreshTasks(silent) {
   }
   state.tasks = resp.data.tasks || [];
   views.taskStats(resp.data.stats || {});
+  updateSpeedPanel(resp.data.stats || {}, state.tasks);
   renderTaskList();
   const stats = resp.data.stats || {};
   $('#nav-task-count').textContent = (stats.running || 0) + (stats.queued || 0) + (stats.paused || 0);
@@ -279,3 +280,104 @@ async function bulkTask(action) {
 /* ============================================================
    媒体库 / 设置 / 日志
    ============================================================ */
+
+/* ============================================================
+   下载速度曲线 + 预估剩余时间
+
+   速度每秒采一次，保留最近 60 个点，用条形图画出来。
+   剩余时间 = 所有未完成任务的剩余字节 / 当前总速度。
+   ============================================================ */
+
+const SPEED_HISTORY_MAX = 60;
+let speedHistory = [];
+let speedTimer = null;
+let lastSpeedBps = 0;
+
+function recordSpeedSample(bps) {
+  lastSpeedBps = Math.max(0, Number(bps) || 0);
+  speedHistory.push(lastSpeedBps);
+  if (speedHistory.length > SPEED_HISTORY_MAX) speedHistory.shift();
+  drawSpeedChart();
+}
+
+function ensureSpeedTimer() {
+  if (speedTimer) return;
+  speedTimer = setInterval(() => recordSpeedSample(lastSpeedBps), 1000);
+}
+
+function drawSpeedChart() {
+  const canvas = $('#speed-chart');
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = Math.max(120, canvas.clientWidth || canvas.parentElement.clientWidth || 600);
+  const cssH = 64;
+  if (canvas.width !== Math.round(cssW * dpr) || canvas.height !== Math.round(cssH * dpr)) {
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+  }
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+
+  const style = getComputedStyle(document.body);
+  const lineColor = (style.getPropertyValue('--line') || '#e3e8f0').trim();
+  const barColor = (style.getPropertyValue('--primary') || '#2563eb').trim();
+
+  // 基线
+  ctx.strokeStyle = lineColor;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, cssH - 0.5);
+  ctx.lineTo(cssW, cssH - 0.5);
+  ctx.stroke();
+
+  const maxValue = Math.max(1, ...speedHistory);
+  const slot = cssW / SPEED_HISTORY_MAX;
+  const barWidth = Math.max(1.5, slot - 1.5);
+  ctx.fillStyle = barColor;
+  speedHistory.forEach((value, index) => {
+    if (value <= 0) return;
+    const height = Math.max(1.5, (value / maxValue) * (cssH - 8));
+    // 越新越亮，一眼能看出趋势
+    ctx.globalAlpha = 0.35 + 0.65 * (index / Math.max(1, speedHistory.length - 1));
+    ctx.fillRect(index * slot, cssH - height - 1, barWidth, height);
+  });
+  ctx.globalAlpha = 1;
+
+  const scale = $('#speed-scale');
+  if (scale) scale.textContent = `峰值 ${fmtSpeed(maxValue)}`;
+}
+
+function updateSpeedPanel(stats, tasks) {
+  const speed = Number((stats || {}).speed) || 0;
+  lastSpeedBps = speed;
+  ensureSpeedTimer();
+
+  const now = $('#speed-now');
+  if (now) now.textContent = speed > 0 ? `当前 ${fmtSpeed(speed)}` : '当前空闲';
+
+  let remainingBytes = 0;
+  let active = 0;
+  (tasks || []).forEach((task) => {
+    if (!['running', 'paused', 'queued'].includes(task.status)) return;
+    const total = Number(task.total_bytes) || 0;
+    const done = Number(task.done_bytes) || 0;
+    if (total > done) {
+      remainingBytes += total - done;
+      active += 1;
+    }
+  });
+
+  const etaNode = $('#speed-eta');
+  if (!etaNode) return;
+  if (!active || remainingBytes <= 0) {
+    etaNode.textContent = '没有进行中的任务';
+    return;
+  }
+  if (speed <= 0) {
+    etaNode.textContent = `剩 ${fmtSize(remainingBytes)}（速度为 0，可能在排队或暂停）`;
+    return;
+  }
+  etaNode.textContent = `剩 ${fmtSize(remainingBytes)} · 预计 ${fmtEta(remainingBytes / speed)}`;
+}

@@ -657,7 +657,7 @@ body:not(.show-quality) .rack-row .quality-badge { display: none; }
 
 .task-row {
   display: grid;
-  grid-template-columns: minmax(170px, 1.9fr) minmax(120px, 1fr) 210px 140px;
+  grid-template-columns: minmax(170px, 1.9fr) minmax(120px, 1fr) 280px 140px;
   gap: 14px; align-items: center;
   padding: 12px 16px;
   border-bottom: 1px solid var(--line);
@@ -667,9 +667,12 @@ body:not(.show-quality) .rack-row .quality-badge { display: none; }
 .task-row .anime { font-size: 13.5px; font-weight: 600; }
 .task-row .ep { font-size: 11.5px; color: var(--fg-mute); margin-top: 3px; }
 .task-row .status-line {
-  display: flex; justify-content: space-between;
+  display: flex; justify-content: space-between; gap: 8px;
   font-size: 11.5px; color: var(--fg-mute); margin-bottom: 5px; font-family: var(--mono);
+  white-space: nowrap;
 }
+.task-row .status-line > span { overflow: hidden; text-overflow: ellipsis; }
+.task-row .status-line > span:last-child { flex: 0 0 auto; }
 .task-row .ops { display: flex; gap: 4px; justify-content: flex-end; flex-wrap: wrap; }
 /* 进度轨道对比要够（原来 #f7f9fc 叠白底几乎看不见，0% 和 100% 分不清） */
 .bar {
@@ -1414,3 +1417,15 @@ html[data-anim="off"] .tab:active {
 .season-row .season-preview.ok { color: var(--ok); }
 .season-row .season-preview.warn { color: var(--warn); }
 .season-row .btn { flex: 0 0 auto; }
+/* ---------------------------------------------------------- 下载速度曲线 */
+.speed-card { margin-bottom: 14px; }
+.speed-body { padding: 10px 14px 8px; }
+#speed-chart {
+  display: block; width: 100%; height: 64px;
+}
+.speed-axis {
+  display: flex; justify-content: space-between;
+  font-size: 11px; color: var(--fg-mute);
+  font-family: var(--mono); margin-top: 4px;
+}
+.speed-eta-hint { color: var(--fg-mute); }
