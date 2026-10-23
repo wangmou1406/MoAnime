@@ -446,9 +446,8 @@ views.taskRow = function (t) {
   const barClass = t.status === 'completed' ? 'done'
     : (['failed', 'canceled'].includes(t.status) ? 'fail' : '');
   // 剩余时间：仅对进行中、知道自己总共多少字节、且速度大于 0 的任务显示
-  const remainBytes = (Number(t.total_bytes) || 0) - (Number(t.done_bytes) || 0);
-  const eta = (running && remainBytes > 0 && Number(t.speed) > 0)
-    ? fmtEtaShort(remainBytes / Number(t.speed)) : '';
+  const etaSeconds = running ? taskEtaSeconds(t) : 0;
+  const eta = etaSeconds > 0 ? fmtEtaShort(etaSeconds) : '';
   const detail = running && t.segments_total
     ? `${t.segments_done}/${t.segments_total} 分片 · ${fmtSpeed(t.speed)}`
     : `${fmtSize(t.done_bytes)}${t.total_bytes ? ' / ' + fmtSize(t.total_bytes) : ''}`;
@@ -538,9 +537,8 @@ views.updateTaskRows = function (tasks) {
     const el = byId.get(String(t.id));
     const progress = Math.max(0, Math.min(100, Number(t.progress || 0)));
     const running = t.status === 'running';
-    const remainBytes = (Number(t.total_bytes) || 0) - (Number(t.done_bytes) || 0);
-    const eta = (running && remainBytes > 0 && Number(t.speed) > 0)
-      ? fmtEtaShort(remainBytes / Number(t.speed)) : '';
+    const etaSeconds = running ? taskEtaSeconds(t) : 0;
+    const eta = etaSeconds > 0 ? fmtEtaShort(etaSeconds) : '';
     const detail = running && t.segments_total
       ? `${t.segments_done}/${t.segments_total} 分片 · ${fmtSpeed(t.speed)}`
       : `${fmtSize(t.done_bytes)}${t.total_bytes ? ' / ' + fmtSize(t.total_bytes) : ''}`;

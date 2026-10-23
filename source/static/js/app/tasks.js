@@ -322,31 +322,90 @@ function drawSpeedChart() {
 
   const style = getComputedStyle(document.body);
   const lineColor = (style.getPropertyValue('--line') || '#e3e8f0').trim();
-  const barColor = (style.getPropertyValue('--primary') || '#2563eb').trim();
+  const mainColor = (style.getPropertyValue('--primary') || '#2563eb').trim();
 
-  // 基线
+  const bottom = cssH - 1;
+  const topPad = 6;
+  const plotH = bottom - topPad;
+
+  // 横向网格线（25% / 50% / 75%）
   ctx.strokeStyle = lineColor;
+  ctx.globalAlpha = 0.55;
   ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(0, cssH - 0.5);
-  ctx.lineTo(cssW, cssH - 0.5);
-  ctx.stroke();
-
-  const maxValue = Math.max(1, ...speedHistory);
-  const slot = cssW / SPEED_HISTORY_MAX;
-  const barWidth = Math.max(1.5, slot - 1.5);
-  ctx.fillStyle = barColor;
-  speedHistory.forEach((value, index) => {
-    if (value <= 0) return;
-    const height = Math.max(1.5, (value / maxValue) * (cssH - 8));
-    // 越新越亮，一眼能看出趋势
-    ctx.globalAlpha = 0.35 + 0.65 * (index / Math.max(1, speedHistory.length - 1));
-    ctx.fillRect(index * slot, cssH - height - 1, barWidth, height);
+  [0.25, 0.5, 0.75].forEach((ratio) => {
+    const y = Math.round(bottom - plotH * ratio) + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(cssW, y);
+    ctx.stroke();
   });
   ctx.globalAlpha = 1;
 
+  const maxValue = Math.max(1, ...speedHistory);
+  const slot = cssW / Math.max(1, SPEED_HISTORY_MAX - 1);
+  const points = speedHistory.map((value, index) => ({
+    x: index * slot,
+    y: bottom - (value / maxValue) * plotH,
+  }));
+
+  if (points.length === 1) {
+    // 只有一个点时画个圆，别让它看起来像空白
+    ctx.fillStyle = mainColor;
+    ctx.beginPath();
+    ctx.arc(points[0].x, points[0].y, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (points.length > 1) {
+    // 折线下方的渐变填充
+    const gradient = ctx.createLinearGradient(0, topPad, 0, bottom);
+    gradient.addColorStop(0, hexToRgba(mainColor, 0.28));
+    gradient.addColorStop(1, hexToRgba(mainColor, 0.02));
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, bottom);
+    points.forEach((point) => ctx.lineTo(point.x, point.y));
+    ctx.lineTo(points[points.length - 1].x, bottom);
+    ctx.closePath();
+    ctx.fillStyle = gradient;
+    ctx.fill();
+
+    // 折线
+    ctx.beginPath();
+    points.forEach((point, index) => {
+      if (index === 0) ctx.moveTo(point.x, point.y);
+      else ctx.lineTo(point.x, point.y);
+    });
+    ctx.strokeStyle = mainColor;
+    ctx.lineWidth = 1.6;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+
+    // 最新点高亮
+    const last = points[points.length - 1];
+    ctx.fillStyle = mainColor;
+    ctx.beginPath();
+    ctx.arc(last.x, last.y, 2.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   const scale = $('#speed-scale');
   if (scale) scale.textContent = `峰值 ${fmtSpeed(maxValue)}`;
+}
+
+/** #rrggbb → rgba()，用于渐变（canvas 不认 CSS 变量） */
+function hexToRgba(color, alpha) {
+  const text = String(color || '').trim();
+  if (text.startsWith('#')) {
+    let hex = text.slice(1);
+    if (hex.length === 3) {
+      hex = hex.split('').map((ch) => ch + ch).join('');
+    }
+    if (hex.length === 6) {
+      const r = parseInt(hex.slice(0, 2), 16);
+      const g = parseInt(hex.slice(2, 4), 16);
+      const b = parseInt(hex.slice(4, 6), 16);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+  }
+  return `rgba(37, 99, 235, ${alpha})`;
 }
 
 function updateSpeedPanel(stats, tasks) {
@@ -361,10 +420,9 @@ function updateSpeedPanel(stats, tasks) {
   let active = 0;
   (tasks || []).forEach((task) => {
     if (!['running', 'paused', 'queued'].includes(task.status)) return;
-    const total = Number(task.total_bytes) || 0;
-    const done = Number(task.done_bytes) || 0;
-    if (total > done) {
-      remainingBytes += total - done;
+    const remain = remainingBytesOf(task);
+    if (remain > 0) {
+      remainingBytes += remain;
       active += 1;
     }
   });

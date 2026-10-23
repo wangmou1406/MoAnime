@@ -43,6 +43,43 @@ function fmtEtaShort(seconds) {
   return hours ? `${hours}:${pad(minutes)}:${pad(secs)}` : `${minutes}:${pad(secs)}`;
 }
 
+/**
+ * 估算一个任务还剩多少字节。
+ *
+ * HLS 任务的 total_bytes 经常是 0（事先不知道总大小），只有 done_bytes 和
+ * progress。这时用「已下载 / 进度」反推总大小，再减去已下载部分。
+ * 两者都算不出来就返回 0，调用方据此不显示剩余时间。
+ */
+function remainingBytesOf(task) {
+  const total = Number(task.total_bytes) || 0;
+  const done = Number(task.done_bytes) || 0;
+  const progress = Number(task.progress) || 0;
+  if (total > done) return total - done;
+  if (done > 0 && progress > 0 && progress < 100) {
+    const estimatedTotal = done / (progress / 100);
+    const remain = estimatedTotal - done;
+    return remain > 0 ? remain : 0;
+  }
+  return 0;
+}
+
+/**
+ * 一个任务还剩多少秒；不可靠时返回 0（调用方就不显示）。
+ *
+ * 进度低于 2% 时反推的总大小误差极大 —— 实测一个刚下 1 个分片的任务会算出
+ * 「48 小时」。超过一天的估算同样不显示，宁可空着也不摆一个假数字。
+ */
+function taskEtaSeconds(task) {
+  const progress = Number(task.progress) || 0;
+  const speed = Number(task.speed) || 0;
+  if (progress < 2 || speed <= 0) return 0;
+  const remain = remainingBytesOf(task);
+  if (remain <= 0) return 0;
+  const seconds = remain / speed;
+  if (!Number.isFinite(seconds) || seconds <= 0 || seconds > 86400) return 0;
+  return seconds;
+}
+
 function fmtTime(ts) {
   if (!ts) return '--';
   if (typeof ts === 'number') return new Date(ts * 1000).toLocaleString('zh-CN', { hour12: false });
