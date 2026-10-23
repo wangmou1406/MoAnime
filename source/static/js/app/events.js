@@ -109,6 +109,21 @@ function installEvents() {
   if (subtitleAuto) subtitleAuto.addEventListener('click', () => openSubtitleDialog());
   const durationCheck = $('#btn-duration-check');
   if (durationCheck) durationCheck.addEventListener('click', runAdCheck);
+  const episodeCheck = $('#btn-episode-check');
+  if (episodeCheck) {
+    episodeCheck.addEventListener('click', () => checkPanelEpisodes());
+    const box = $('#episode-check');
+    if (box) {
+      // 结果区里的「换个条目」按钮
+      box.addEventListener('click', (e) => {
+        const pick = e.target.closest('[data-act="bili-season"]');
+        if (pick) {
+          e.preventDefault();
+          checkPanelEpisodes(Number(pick.dataset.season));
+        }
+      });
+    }
+  }
 
   /* ---------------- 剧集预览（图片 + 在线播放） ---------------- */
   $('#episode-list').addEventListener('click', (e) => {

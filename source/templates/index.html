@@ -186,8 +186,13 @@
             <button class="btn btn-outline-light btn-sm" id="btn-duration-check"
                     title="完整广告体检（两条通道一起跑，检测完自动把问题源排到末尾）｜时长通道：只对比各源都给出同一集的那些源，查插播广告片 / 内容残缺 ｜ 画面文字通道：各源只下开头 20 秒抽帧 OCR，查「本片由 xxx 赞助发布 / 主营：棋牌 捕鱼」这类叠上去的字幕广告（它不改变时长，所以时长通道查不到）｜ 建议：先在剧集面板点选某一集再体检，各源才会去取同一集，时长对比才准确">
               <i class="bi bi-shield-exclamation"></i> 广告体检</button>
+            <button class="btn btn-outline-light btn-sm" id="btn-episode-check"
+                    title="拿 B 站官方集数核对这个源给出的剧集：能立刻看出源是不是给全了（例如源只给 11 集、官方 100 集）">
+              <i class="bi bi-check2-square"></i> 校验集数</button>
             <span class="text-dim ms-1" style="font-size:12px">同一集重复下载会覆盖原文件</span>
           </div>
+          <!-- 校验结果：复用番剧库的 .lib-check 样式 -->
+          <div class="lib-check" id="episode-check" hidden></div>
           <div id="episode-list" class="ep-strip"></div>
         </div>
       </div>

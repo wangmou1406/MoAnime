@@ -152,7 +152,13 @@ def library_bili_check():
     except (TypeError, ValueError):
         season_id = None
 
-    names = _local_episode_names(anime_name)
+    names = data.get("episode_names")
+    if isinstance(names, list) and names:
+        # 剧集面板用：这里传的是刚解析出来的源剧集名，只拿来做集号解析，
+        # 不参与任何文件访问，所以接受前端传值没有风险。
+        names = [str(item) for item in names if str(item).strip()][:5000]
+    else:
+        names = _local_episode_names(anime_name)
     try:
         result = bili.check(anime_name, names, season_id=season_id)
     except bili.BiliError as exc:

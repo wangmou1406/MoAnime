@@ -36,7 +36,8 @@ async function checkEpisodeCount(button, seasonId) {
   }
 }
 
-function renderEpisodeCheck(data) {
+function renderEpisodeCheck(data, label) {
+  const who = label || '本地';
   if (!data || !data.found) {
     const reason = (data && data.reason) || 'B 站没有搜到这部番';
     return `<div class="line dim"><i class="bi bi-question-circle"></i> ${esc(reason)}</div>`;
@@ -54,13 +55,13 @@ function renderEpisodeCheck(data) {
   const lines = [];
   if (data.complete) {
     lines.push(`<div class="line ok"><i class="bi bi-check-circle"></i> `
-      + `本地 ${data.local_in_range} 集，与官方一致</div>`);
+      + `${who} ${data.local_in_range} 集，与官方一致</div>`);
   } else if (!data.local_in_range) {
     lines.push(`<div class="line dim"><i class="bi bi-info-circle"></i> `
-      + `本地没有可识别的集号，无法比对</div>`);
+      + `${who}没有可识别的集号，无法比对</div>`);
   } else {
     lines.push(`<div class="line warn"><i class="bi bi-exclamation-triangle"></i> `
-      + `本地 ${data.local_in_range} / 官方 ${total} 集，缺 ${data.missing.length} 集</div>`);
+      + `${who} ${data.local_in_range} / 官方 ${total} 集，缺 ${data.missing.length} 集</div>`);
     const shown = data.missing.slice(0, MISSING_SHOW_LIMIT)
       .map((n) => `第${n}集`).join('、');
     const more = data.missing.length > MISSING_SHOW_LIMIT
@@ -71,7 +72,7 @@ function renderEpisodeCheck(data) {
   if (data.beyond && data.beyond.length) {
     const shown = data.beyond.slice(0, 8).join('、');
     const more = data.beyond.length > 8 ? '…' : '';
-    lines.push(`<div class="line dim">本地另有 ${data.beyond.length} 集超出官方集数`
+    lines.push(`<div class="line dim">${who}另有 ${data.beyond.length} 集超出官方集数`
       + `（${shown}${more}），可能是后续季或特别篇</div>`);
   }
 
@@ -84,4 +85,43 @@ function renderEpisodeCheck(data) {
     : '';
 
   return head + lines.join('') + picks;
+}
+
+/* ---------------- 剧集面板里的校验（还没下载的番）---------------- */
+
+async function checkPanelEpisodes(seasonId) {
+  const anime = state.currentAnime;
+  const box = $('#episode-check');
+  const button = $('#btn-episode-check');
+  if (!anime || !box || !button) {
+    toastWarn('先点开一部番的剧集面板');
+    return;
+  }
+  const names = (state.episodes || []).map((ep) => ep && ep.name).filter(Boolean);
+  if (!names.length) {
+    toastWarn('这个源没有给出剧集');
+    return;
+  }
+
+  const original = button.innerHTML;
+  button.disabled = true;
+  button.innerHTML = '<i class="bi bi-hourglass-split"></i> 查询中…';
+  box.hidden = false;
+  box.innerHTML = '<div class="line dim"><i class="bi bi-hourglass-split"></i> 正在查询 B 站…</div>';
+
+  try {
+    const payload = { anime_name: anime.name, episode_names: names };
+    if (seasonId) payload.season_id = seasonId;
+    const resp = await api('/api/library/bili/check', 'POST', payload);
+    if (!resp.ok) {
+      box.innerHTML = `<div class="line warn"><i class="bi bi-exclamation-triangle"></i> ${esc(resp.error)}</div>`;
+      return;
+    }
+    box.innerHTML = renderEpisodeCheck(resp.data, '该源');
+  } catch (err) {
+    box.innerHTML = `<div class="line warn"><i class="bi bi-exclamation-triangle"></i> 查询失败：${esc(err)}</div>`;
+  } finally {
+    button.disabled = false;
+    button.innerHTML = original;
+  }
 }
