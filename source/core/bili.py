@@ -272,6 +272,16 @@ def season_detail(season_id: int) -> dict:
     for section in result.get("section") or []:
         extras += len(section.get("episodes") or [])
 
+    # 「同系列的所有季」：这份列表才是分季整理要用的（总集数在主条目里没有）
+    seasons = []
+    for item in result.get("seasons") or []:
+        if not isinstance(item, dict):
+            continue
+        seasons.append({
+            "season_id": item.get("season_id"),
+            "title": clean_text(item.get("season_title") or item.get("title") or ""),
+        })
+
     return {
         "season_id": int(season_id),
         "title": clean_text(result.get("title") or ""),
@@ -280,8 +290,81 @@ def season_detail(season_id: int) -> dict:
         "episode_count": len(episodes),
         "extras": extras,
         "episodes": episodes,
+        "seasons": seasons,
+        "series_title": clean_text((result.get("series") or {}).get("series_title") or ""),
         "score": ((result.get("rating") or {}).get("score")),
         "url": "https://www.bilibili.com/bangumi/play/ss%s" % season_id,
+    }
+
+
+# 同一系列里这些条目不是「新的一季」，整理时不该占一个季号
+_NOT_A_SEASON = ("中配", "日语版", "粤配", "台配", "英配", "总集篇", "剧场版",
+                 "特别篇", "番外", "回顾", "合集")
+
+
+def series_seasons(anime_name: str, season_id: int = None) -> dict:
+    """查一部番「同系列有哪几季、每季多少集」，用于自动按季整理。
+
+    B 站把分季信息放在番剧详情的 seasons 字段里，但那里只有标题没有集数，
+    所以还要逐条查详情补 total。配音版/总集篇会滤掉 —— 它们不是新的一季。
+    """
+    candidates = search(anime_name)
+    if not candidates:
+        return {"found": False, "reason": "B 站没有搜到这部番", "seasons": []}
+
+    base = None
+    if season_id:
+        base = next((c for c in candidates if c["season_id"] == int(season_id)), None)
+    if base is None:
+        base = candidates[0]
+    if not season_id and base["score"] < MIN_MATCH:
+        return {"found": False,
+                "reason": "名字对不上（最接近的是「%s」）" % base["title"],
+                "seasons": []}
+
+    detail = season_detail(base["season_id"])
+    raw = detail.get("seasons") or [{"season_id": base["season_id"], "title": base["title"]}]
+    base_title = _norm(detail.get("title") or base["title"])
+
+    seasons = []
+    for item in raw:
+        label = item.get("title") or item.get("season_title") or ""
+        if any(word in label for word in _NOT_A_SEASON):
+            continue
+        try:
+            sub = season_detail(item["season_id"])
+        except BiliError:
+            continue
+        if not sub.get("total"):
+            continue
+        # 只保留「标题以主篇名开头」的条目：B 站把同系列里的衍生作
+        # （鬼灭学园物语、交响音乐会）也塞进 seasons，它们不该各占一个季号。
+        # 主篇名只能在详情里拿到 —— seasons 里只有「立志篇」这样的后缀。
+        if base_title and not _norm(sub.get("title") or "").startswith(base_title):
+            continue
+        seasons.append({
+            "season_id": sub["season_id"],
+            "title": sub["title"] or label,
+            "season_title": sub["season_title"] or label,
+            "total": int(sub["total"]),
+        })
+
+    # 同一季可能被标成不同标题，按 season_id 去重
+    seen, unique = set(), []
+    for item in seasons:
+        if item["season_id"] in seen:
+            continue
+        seen.add(item["season_id"])
+        unique.append(item)
+
+    return {
+        "found": bool(unique),
+        "series_title": detail.get("series_title") or "",
+        "base": {"season_id": detail["season_id"], "title": detail["title"],
+                 "total": detail["total"]},
+        "seasons": unique,
+        "total": sum(item["total"] for item in unique),
+        "reason": "" if unique else "这一系列在 B 站只有一季,没有可拆的分季信息",
     }
 
 

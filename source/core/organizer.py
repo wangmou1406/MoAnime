@@ -260,15 +260,18 @@ def _resolve(item: dict, default_season: int):
 
 
 def _target_relative(anime: str, episode: float, ext: str, scheme: str,
-                     season: int, default_season: int) -> str:
+                     season: int, default_season: int, force_season: bool = False) -> str:
     """按命名规则算出相对路径。
 
     有一处特例：simple / anime 这两种方案本身不体现季号，如果文件属于
     非默认季，直接压平会让「S02E06」和「S01E06」撞名。这种情况保留一层
     Season 目录，宁可路径不够"标准"，也别把两季混成一季。
+
+    force_season：按季整理时用。即使第 1 季也要放进 Season 01，
+    否则同一部番有的季在子目录、有的散在根目录，看起来像没整理。
     """
     relative = build_relative_path(anime, _episode_name(episode), ext, scheme, season)
-    if scheme in ("simple", "anime") and season != default_season:
+    if scheme in ("simple", "anime") and (force_season or season != default_season):
         parts = relative.split(os.sep)
         if len(parts) >= 2:                       # 番名/文件
             parts.insert(1, "Season %02d" % season)
@@ -276,17 +279,66 @@ def _target_relative(anime: str, episode: float, ext: str, scheme: str,
     return relative
 
 
+def _season_from_rules(episode: float, counts) -> int:
+    """按「每季集数」算出集号属于第几季。
+
+    counts 例如 [100, 22]：1-100 属第 1 季，101-122 属第 2 季。
+    超出所有季的总和时，归到最后一季（通常是总集篇/特别篇）。
+    """
+    number = int(episode)
+    start = 1
+    for index, count in enumerate(counts or [], start=1):
+        try:
+            span = int(count)
+        except (TypeError, ValueError):
+            continue
+        if span <= 0:
+            continue
+        if number < start + span:
+            return index
+        start += span
+    return len(counts) if counts else 1
+
+
+def parse_season_counts(text) -> list:
+    """把「100,22」或「100 22」这类输入解析成 [100, 22]。"""
+    if isinstance(text, (list, tuple)):
+        items = text
+    else:
+        items = re.split(r"[,，\s/+]+", str(text or ""))
+    out = []
+    for item in items:
+        item = str(item).strip()
+        if not item:
+            continue
+        try:
+            value = int(float(item))
+        except ValueError:
+            continue
+        if value > 0:
+            out.append(value)
+    return out
+
+
 def build_plan(download_dir: str = None, scheme: str = None, season: int = None,
-               history_paths: dict = None) -> dict:
+               history_paths: dict = None, season_rules: dict = None,
+               force_season: bool = False) -> dict:
     """生成整理计划。
 
     history_paths: {旧路径: (动漫名, 集名)}，用于给「文件名看不出番名」的
     文件补一个准确归属（下载历史里记着它本来是哪个番）。
+
+    season_rules: {动漫名: [每季集数]}，按集号区间把文件分到各季。
+    force_season: 即使第 1 季也建 Season 目录（按季整理时用）。
     """
     base = os.path.abspath(download_dir or config.download_dir())
     scheme = normalize_scheme(scheme or config.get("naming_scheme"))
     default_season = int(season if season is not None else config.get("default_season", 1) or 1)
     organize = bool(config.get("organize_by_anime", True))
+    rules = {str(k).strip(): parse_season_counts(v) for k, v in (season_rules or {}).items()}
+    rules = {k: v for k, v in rules.items() if v}
+    if rules:
+        force_season = True
 
     by_path = {}
     for old, value in (history_paths or {}).items():
@@ -339,9 +391,15 @@ def build_plan(download_dir: str = None, scheme: str = None, season: int = None,
             items.append(_skip_item(video, base, "无法识别集数", entry["from_history"]))
             continue
 
+        # 用户给了「每季集数」就按集号区间定季，否则沿用目录/文件名里解析出来的季
+        season_of_item = entry["season"]
+        if anime in rules:
+            season_of_item = _season_from_rules(episode, rules[anime])
+            entry["season"] = season_of_item
+
         ext = video["ext"].lstrip(".")
         relative = _target_relative(anime, episode, ext, scheme,
-                                    entry["season"], default_season)
+                                    season_of_item, default_season, force_season)
         target = os.path.join(base, relative)
         reason = ""
 
@@ -407,11 +465,31 @@ def build_plan(download_dir: str = None, scheme: str = None, season: int = None,
         "case_only": sum(1 for i in will_move if "大小写" in (i["reason"] or "")),
         "animes": len({i["anime"] for i in items if i.get("anime")}),
     }
+    # 每部番按季的集数分布，供前端预览「会分成几季、每季多少集」
+    season_summary = {}
+    for item in items:
+        name = item.get("anime")
+        if not name:
+            continue
+        entry = season_summary.setdefault(name, {"count": 0, "seasons": {}, "min": None, "max": None})
+        entry["count"] += 1
+        if item.get("season") is not None:
+            key = str(int(item["season"]))
+            entry["seasons"][key] = entry["seasons"].get(key, 0) + 1
+        number = item.get("episode")
+        if isinstance(number, (int, float)):
+            value = int(number)
+            entry["min"] = value if entry["min"] is None else min(entry["min"], value)
+            entry["max"] = value if entry["max"] is None else max(entry["max"], value)
+
     return {
         "download_dir": base,
         "scheme": scheme,
         "season": default_season,
         "organize_by_anime": organize,
+        "season_rules": rules,
+        "force_season": force_season,
+        "season_summary": season_summary,
         "items": items,
         "stats": stats,
     }

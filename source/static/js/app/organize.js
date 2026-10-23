@@ -156,3 +156,193 @@ async function applyOrganize() {
   await loadOrganizePlan();
   await loadLibrary();
 }
+
+/* ============================================================
+   按季整理：把一部番的连续集号拆进 Season 目录
+
+   季边界两种来源：
+     1. 手填「每季集数」，如 100,22
+     2. 自动爬取 —— 去 B 站查同系列所有季的集数（bili.series_seasons）
+   只移动和改名，不删文件。
+   ============================================================ */
+
+let seasonRows = [];
+
+function parseSeasonCounts(text) {
+  return String(text || '')
+    .split(/[,，\s/+]+/)
+    .map((item) => parseInt(item, 10))
+    .filter((value) => Number.isFinite(value) && value > 0);
+}
+
+function seasonOfEpisode(episode, counts) {
+  let start = 1;
+  for (let index = 0; index < counts.length; index += 1) {
+    if (episode < start + counts[index]) return index + 1;
+    start += counts[index];
+  }
+  return counts.length;          // 超出总和时并到最后一季
+}
+
+function previewSeasons(row, counts) {
+  const buckets = {};
+  (row.episodes || []).forEach((episode) => {
+    const season = counts.length ? seasonOfEpisode(episode, counts) : 1;
+    buckets[season] = (buckets[season] || 0) + 1;
+  });
+  return buckets;
+}
+
+function updateSeasonPreview(rowEl) {
+  const anime = rowEl.dataset.anime;
+  const row = seasonRows.find((item) => item.anime === anime);
+  const preview = rowEl.querySelector('.season-preview');
+  const applyBtn = $('#btn-season-apply');
+  if (!row || !preview) return;
+
+  const counts = parseSeasonCounts(rowEl.querySelector('.season-counts').value);
+  const buckets = previewSeasons(row, counts);
+  const keys = Object.keys(buckets).sort((a, b) => Number(a) - Number(b));
+
+  if (!counts.length) {
+    preview.className = 'season-preview';
+    preview.textContent = '未填 → 全部归到第 1 季';
+    return;
+  }
+
+  const parts = keys.map((key) => `S${key}: ${buckets[key]} 集`);
+  const sum = counts.reduce((acc, value) => acc + value, 0);
+  preview.textContent = parts.join(' · ');
+  if (sum < row.max) {
+    preview.className = 'season-preview warn';
+    preview.textContent += `（每季集数合计 ${sum} < 最大集号 ${row.max}，后面的并到最后一季）`;
+  } else {
+    preview.className = 'season-preview ok';
+  }
+  applyBtn.disabled = false;
+}
+
+function renderSeasonRows() {
+  const box = $('#season-rows');
+  if (!seasonRows.length) {
+    box.innerHTML = '<div class="org-empty">下载目录里没有可识别的剧集</div>';
+    return;
+  }
+  box.innerHTML = seasonRows.map((row) => `
+    <div class="season-row" data-anime="${esc(row.anime)}">
+      <div class="nm">${esc(row.anime)}
+        <span class="sm">${row.count} 个文件 · 第 ${row.min}–${row.max} 集</span>
+      </div>
+      <input class="form-control form-control-sm season-counts"
+             placeholder="每季集数，如 100,22" autocomplete="off">
+      <button class="btn btn-outline-light btn-sm" data-act="season-autofill"
+              title="去 B 站查这个系列有几季、每季多少集">
+        <i class="bi bi-cloud-download"></i> 自动爬取</button>
+      <span class="season-preview">未填 → 全部归到第 1 季</span>
+    </div>`).join('');
+  $('#btn-season-apply').disabled = true;
+}
+
+async function openSeasonSplit() {
+  showModal('modal-seasons');
+  const box = $('#season-rows');
+  box.innerHTML = '<div class="org-empty">扫描中…</div>';
+  $('#btn-season-apply').disabled = true;
+
+  const resp = await api('/api/library/organize/plan', 'POST', {});
+  if (!resp.ok) {
+    box.innerHTML = `<div class="org-empty">扫描失败：${esc(resp.error)}</div>`;
+    return;
+  }
+  const groups = new Map();
+  ((resp.data || {}).items || []).forEach((item) => {
+    if (!item.anime || item.episode === null || item.episode === undefined) return;
+    if (!groups.has(item.anime)) groups.set(item.anime, { anime: item.anime, episodes: [] });
+    groups.get(item.anime).episodes.push(Number(item.episode));
+  });
+  seasonRows = Array.from(groups.values()).map((row) => {
+    const episodes = row.episodes.filter((n) => Number.isFinite(n)).sort((a, b) => a - b);
+    return {
+      anime: row.anime,
+      episodes,
+      count: episodes.length,
+      min: episodes[0],
+      max: episodes[episodes.length - 1],
+    };
+  }).sort((a, b) => a.anime.localeCompare(b.anime, 'zh'));
+  renderSeasonRows();
+}
+
+async function autoFillSeasons(button) {
+  const rowEl = button.closest('.season-row');
+  const anime = rowEl.dataset.anime;
+  const original = button.innerHTML;
+  button.disabled = true;
+  button.innerHTML = '<i class="bi bi-hourglass-split"></i> 查询中…';
+  try {
+    const resp = await api('/api/library/organize/suggest', 'POST', { anime_name: anime });
+    if (!resp.ok) {
+      toastErr(resp.error);
+      return;
+    }
+    const data = resp.data || {};
+    const preview = rowEl.querySelector('.season-preview');
+    if (!data.splittable) {
+      preview.className = 'season-preview warn';
+      preview.textContent = data.reason
+        || (data.seasons && data.seasons.length
+          ? `B 站只有 1 季（${data.seasons[0].total} 集），没有分季可拆`
+          : 'B 站查不到这个系列的分季信息');
+      return;
+    }
+    rowEl.querySelector('.season-counts').value = data.counts.join(',');
+    updateSeasonPreview(rowEl);
+    const titles = data.seasons.map((s) => `${s.title}(${s.total})`).join(' / ');
+    toastOk(`${anime}：B 站 ${data.counts.length} 季 共 ${data.total} 集 — ${titles}`);
+  } catch (err) {
+    toastErr(`自动爬取失败：${err}`);
+  } finally {
+    button.disabled = false;
+    button.innerHTML = original;
+  }
+}
+
+async function applySeasonSplit() {
+  const rules = {};
+  $$('#season-rows .season-row').forEach((rowEl) => {
+    const counts = parseSeasonCounts(rowEl.querySelector('.season-counts').value);
+    if (counts.length) rules[rowEl.dataset.anime] = counts;
+  });
+  const names = Object.keys(rules);
+  if (!names.length) {
+    toastWarn('先给至少一部番填「每季集数」，或点「自动爬取」');
+    return;
+  }
+  if (!confirm(`按季整理这 ${names.length} 部番？\n\n会移动文件到 Season 目录，不会删除。\n${names.join('、')}`)) {
+    return;
+  }
+  const button = $('#btn-season-apply');
+  button.disabled = true;
+  button.textContent = '整理中…';
+  try {
+    const resp = await api('/api/library/organize/apply', 'POST', {
+      season_rules: rules,
+      season: Number((state.settings || {}).default_season) || 1,
+    });
+    if (!resp.ok) {
+      toastErr(resp.error);
+      return;
+    }
+    const stats = (resp.data || {}).stats || {};
+    if (stats.failed) {
+      toastWarn(`移动 ${stats.moved} 个，失败 ${stats.failed} 个（详情见日志）`);
+    } else {
+      toastOk(`按季整理完成：移动 ${stats.moved} 个，清理空目录 ${resp.data.pruned_dirs || 0} 个`);
+    }
+    hideModal('modal-seasons');
+    await loadLibrary();
+  } finally {
+    button.disabled = false;
+    button.textContent = '按季整理';
+  }
+}

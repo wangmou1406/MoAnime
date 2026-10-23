@@ -1393,3 +1393,24 @@ html[data-anim="off"] .tab:active {
   border-color: var(--primary); color: var(--primary); background: var(--primary-soft);
 }
 .lib-check a { color: var(--primary); }
+/* ---------------------------------------------------------- 按季整理 */
+.season-row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 9px 0; border-bottom: 1px solid var(--line);
+}
+.season-row:last-child { border-bottom: 0; }
+.season-row .nm { flex: 1 1 220px; min-width: 0; font-size: 13px; font-weight: 600; }
+.season-row .nm .sm {
+  display: block; font-weight: 400; font-size: 11.5px;
+  color: var(--fg-mute); font-family: var(--mono);
+}
+.season-row input.season-counts {
+  flex: 0 0 190px; font-family: var(--mono); font-size: 12px;
+}
+.season-row .season-preview {
+  flex: 1 1 210px; min-width: 0; font-size: 11.5px;
+  color: var(--fg-mute); font-family: var(--mono);
+}
+.season-row .season-preview.ok { color: var(--ok); }
+.season-row .season-preview.warn { color: var(--warn); }
+.season-row .btn { flex: 0 0 auto; }

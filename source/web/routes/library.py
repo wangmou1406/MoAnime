@@ -193,14 +193,54 @@ def _local_episode_names(anime_name: str) -> list:
     return sorted(out)
 
 
+@api.route("/library/organize/suggest", methods=["GET", "POST"])
+def library_organize_suggest():
+    """自动爬取一部番的分季信息，换算成「每季集数」。
+
+    数据来自 B 站番剧详情里的 seasons 字段（同系列所有季），逐条补 total，
+    滤掉配音版/总集篇/衍生作。拿不到就是拿不到，不会瞎猜。
+    """
+    data = body()
+    anime_name = (data.get("anime_name") or "").strip()
+    if not anime_name:
+        return fail("缺少 anime_name")
+    season_id = data.get("season_id")
+    try:
+        season_id = int(season_id) if season_id else None
+    except (TypeError, ValueError):
+        season_id = None
+
+    try:
+        info = bili.series_seasons(anime_name, season_id=season_id)
+    except bili.BiliError as exc:
+        return fail("查询 B 站失败：%s" % exc)
+
+    counts = [int(item["total"]) for item in info.get("seasons") or []]
+    return ok({
+        "anime_name": anime_name,
+        "found": info.get("found"),
+        "reason": info.get("reason") or "",
+        "series_title": info.get("series_title") or "",
+        "seasons": info.get("seasons") or [],
+        "counts": counts,
+        "total": sum(counts),
+        "splittable": len(counts) > 1,
+    })
+
+
 @api.route("/library/organize/plan", methods=["GET", "POST"])
 def library_organize_plan():
-    """生成番剧整理计划（只看不动文件）。"""
+    """生成番剧整理计划（只看不动文件）。
+
+    season_rules: {动漫名: [每季集数]}，用于「按季整理」。
+    传了就把文件按集号区间分到各季，并强制建 Season 目录。
+    """
     data = body()
     plan = organizer.build_plan(
         scheme=data.get("scheme"),
         season=data.get("season"),
         history_paths=organizer.history_index(),
+        season_rules=data.get("season_rules") if isinstance(data.get("season_rules"), dict) else None,
     )
     return ok(plan)
 
@@ -217,6 +257,7 @@ def library_organize_apply():
         scheme=data.get("scheme"),
         season=data.get("season"),
         history_paths=organizer.history_index(),
+        season_rules=data.get("season_rules") if isinstance(data.get("season_rules"), dict) else None,
     )
     if not plan["stats"]["move"]:
         logger.info("自动整理：没有需要移动的文件")

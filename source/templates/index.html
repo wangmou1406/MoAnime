@@ -329,6 +329,7 @@
         <div class="ops">
           <button class="btn btn-outline-light btn-sm" id="btn-library-refresh"><i class="bi bi-arrow-clockwise"></i> 重新扫描</button>
           <button class="btn btn-outline-light btn-sm" id="btn-library-organize"><i class="bi bi-magic"></i> 自动整理</button>
+          <button class="btn btn-outline-light btn-sm" id="btn-library-seasons"><i class="bi bi-collection"></i> 按季整理</button>
           <button class="btn btn-outline-light btn-sm" id="btn-library-clean"><i class="bi bi-eraser"></i> 清理失效记录</button>
           <button class="btn btn-outline-light btn-sm" id="btn-library-open"><i class="bi bi-folder2-open"></i> 打开目录</button>
         </div>
@@ -693,6 +694,31 @@
       <div class="modal-footer">
         <button class="btn btn-outline-light btn-sm" data-bs-dismiss="modal">取消</button>
         <button class="btn btn-primary btn-sm" id="btn-organize-apply" disabled>执行整理</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ 按季整理 ============================ -->
+<div class="modal fade" id="modal-seasons" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-collection"></i> 按季整理</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="hint-box mb-3">
+          把每部番按集号区间拆进 <code>Season 01</code> / <code>Season 02</code> 目录。
+          在「每季集数」里填 <code>100,22</code> 表示 1–100 进第 1 季、101–122 进第 2 季；
+          也可以点「自动爬取」从 B 站查这个系列一共有几季、每季多少集。<br>
+          只移动和改名，不会删除文件。
+        </div>
+        <div id="season-rows"><div class="org-empty">扫描中…</div></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-light btn-sm" data-bs-dismiss="modal">取消</button>
+        <button class="btn btn-primary btn-sm" id="btn-season-apply" disabled>按季整理</button>
       </div>
     </div>
   </div>

@@ -544,6 +544,28 @@ function installEvents() {
     const orgApply = $('#btn-organize-apply');
     if (orgApply) orgApply.addEventListener('click', applyOrganize);
   }
+
+  /* 按季整理：填每季集数（或自动爬取）→ 执行 */
+  const seasonBtn = $('#btn-library-seasons');
+  if (seasonBtn) {
+    seasonBtn.addEventListener('click', openSeasonSplit);
+    const seasonApply = $('#btn-season-apply');
+    if (seasonApply) seasonApply.addEventListener('click', applySeasonSplit);
+    const rows = $('#season-rows');
+    if (rows) {
+      rows.addEventListener('input', (e) => {
+        const input = e.target.closest('.season-counts');
+        if (input) updateSeasonPreview(input.closest('.season-row'));
+      });
+      rows.addEventListener('click', (e) => {
+        const auto = e.target.closest('[data-act="season-autofill"]');
+        if (auto) {
+          e.preventDefault();
+          autoFillSeasons(auto);
+        }
+      });
+    }
+  }
   $('#library-filter').addEventListener('input', debounce((e) => {
     const keyword = e.target.value.trim().toLowerCase();
     $$('#library-list .lib-anime').forEach((card) => {
