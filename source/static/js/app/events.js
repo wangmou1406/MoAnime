@@ -637,8 +637,23 @@ function installEvents() {
       window.location.href = '/api/sources/export?download=1&include_builtin=1';
     } else if (e.target.closest('#btn-ffmpeg-refresh')) {
       loadFfmpegStatus();
+    } else if (e.target.closest('#btn-lan-enable')) {
+      setListenHost('0.0.0.0');
+    } else if (e.target.closest('#btn-lan-local')) {
+      setListenHost('127.0.0.1');
+    } else if (e.target.closest('#btn-lan-refresh')) {
+      loadLanInfo();
+    } else if (e.target.closest('[data-copy]')) {
+      const text = e.target.closest('[data-copy]').dataset.copy;
+      try {
+        await navigator.clipboard.writeText(text);
+        toastOk('已复制：' + text);
+      } catch (err) {
+        // http://192.168.x.x 不是安全上下文，剪贴板 API 用不了，退回手动复制
+        prompt('复制这个地址：', text);
+      }
     } else if (e.target.closest('#btn-ffmpeg-install')) {
-      if (!confirm('将下载约 100oB 的 ffmpeg 到 tools 目录，继续？')) return;
+      if (!confirm('将下载约 100 MB 的 ffmpeg 到 tools 目录，继续？')) return;
       const resp = await api('/api/system/ffmpeg/install', 'POST');
       if (resp.ok) { toastOk(resp.data.message); loadFfmpegStatus(); }
       else toastErr(resp.error);

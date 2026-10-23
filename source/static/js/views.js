@@ -748,6 +748,8 @@ SETTING_GROUPS = [
       { key: 'log_level', label: '日志级别', type: 'logLevel', span: 3 },
       { key: 'web_port', label: 'Web 端口（重启生效）', type: 'number', span: 3, min: 1024, max: 65535 },
       { key: 'web_host', label: '监听地址（重启生效）', type: 'text', span: 3 },
+      { key: 'access_token', label: '访问令牌（局域网访问时校验，留空=不校验）', type: 'text', span: 6,
+        hint: '填了之后，本机以外的电脑必须带上令牌才能访问；本机不受影响' },
       { key: 'auto_open_browser', label: '启动后自动打开浏览器', type: 'switch', span: 6 },
       { key: 'merge_duplicates', label: '检索结果合并同名片源', type: 'switch', span: 6 },
       { key: 'auto_detect_sources', label: '允许自动探测生成配置', type: 'switch', span: 6 },
@@ -766,6 +768,27 @@ views.settings = function (settings, schemes) {
         </div>
       </div>
     </div>`).join('') + `
+    <div class="card">
+      <div class="card-head"><h3>远程访问 · 其它电脑上看同一个库</h3>
+        <div class="spacer"></div>
+        <span id="lan-status" class="badge badge-dim">检测中…</span></div>
+      <div class="card-body">
+        <div class="hint-box mb-3">
+          源、任务、下载历史都存在<b>运行服务的这台机器</b>上。想让另一台电脑看到同样的内容，
+          不需要同步 —— 让那台电脑直接用浏览器打开这里的局域网地址即可，
+          两边看到的是同一份数据，进度也是实时同步的。
+        </div>
+        <div id="lan-info" class="text-dim" style="font-size:12.5px">检测中…</div>
+        <div class="d-flex gap-2 align-items-center flex-wrap mt-3">
+          <button class="btn btn-outline-light btn-sm" id="btn-lan-enable">
+            <i class="bi bi-broadcast"></i> 允许局域网访问</button>
+          <button class="btn btn-outline-light btn-sm" id="btn-lan-local">
+            <i class="bi bi-pc-display"></i> 仅本机</button>
+          <button class="btn btn-outline-light btn-sm" id="btn-lan-refresh">
+            <i class="bi bi-arrow-clockwise"></i> 刷新地址</button>
+        </div>
+      </div>
+    </div>
     <div class="card">
       <div class="card-head"><h3>外部依赖 · ffmpeg</h3>
         <div class="spacer"></div><span id="ffmpeg-status" class="badge badge-dim">检测中…</span></div>

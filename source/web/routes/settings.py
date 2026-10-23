@@ -5,8 +5,8 @@
 """
 
 import os
-from flask import request
-from core.config import DATA_DIR, DEFAULT_SETTINGS, DISCLAIMER_VERSION, config
+from flask import make_response, request
+from core.config import DATA_DIR, DEFAULT_SETTINGS, DISCLAIMER_VERSION, TOKEN_COOKIE, config
 from core.database import db
 from core.logging_setup import clear_logs
 from core.naming import scheme_labels
@@ -36,7 +36,16 @@ def update_settings():
         logger.info("下载目录已更新为：%s", data["download_dir"])
     if {"concurrent_tasks", "segment_threads"} & set(data.keys()):
         download_manager.apply_settings()
-    return ok({"settings": config.all()})
+
+    payload = ok({"settings": config.all()})
+    # 远程客户端刚设了令牌：顺手给它种上 cookie，否则保存完下一次请求就被拦了
+    token = (config.get("access_token") or "").strip()
+    if "access_token" in data and token:
+        response = make_response(payload)
+        response.set_cookie(TOKEN_COOKIE, token, max_age=86400 * 30,
+                            httponly=True, samesite="Lax")
+        return response
+    return payload
 
 
 @api.post("/settings/reset")

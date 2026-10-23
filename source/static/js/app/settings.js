@@ -17,6 +17,74 @@ async function loadSettings() {
   bindAppearanceControls();
   applyTheme(state.settings.theme || 'light');
   applyAppearance(state.settings);
+  loadLanInfo();
+}
+
+/* ---------------- 远程访问 ---------------- */
+
+async function loadLanInfo() {
+  const info = $('#lan-info');
+  const status = $('#lan-status');
+  if (!info || !status) return;
+
+  const resp = await api('/api/system/network');
+  if (!resp.ok) {
+    info.textContent = '读取失败：' + resp.error;
+    status.textContent = '读取失败';
+    return;
+  }
+  const data = resp.data;
+  state.lan = data;
+
+  status.textContent = data.lan_enabled ? '已开放局域网' : '仅本机';
+  status.className = 'badge ' + (data.lan_enabled ? 'badge-ok' : 'badge-dim');
+
+  const rows = [];
+  rows.push(`<div>本机：<code>${esc(data.local_url)}</code></div>`);
+  if (!data.lan_enabled) {
+    rows.push('<div class="mt-2">当前只监听 <code>127.0.0.1</code>，'
+      + '别的电脑连不上。点下面的「允许局域网访问」后<b>重启服务</b>生效。</div>');
+  } else if (data.addresses && data.addresses.length) {
+    rows.push('<div class="mt-2">局域网地址（在另一台电脑的浏览器里打开）：</div>');
+    data.addresses.forEach((item, index) => {
+      const shown = data.token_enabled ? `${item.url}?token=…` : item.url;
+      const badge = item.primary
+        ? '<span class="badge badge-ok" style="flex:0 0 auto">推荐</span>'
+        : '<span class="badge badge-dim" style="flex:0 0 auto">其它网卡</span>';
+      rows.push(`<div class="d-flex align-items-center gap-2 mt-1">
+        ${badge}
+        <code id="lan-url-${index}">${esc(shown)}</code>
+        <button class="btn btn-outline-light btn-sm btn-icon" data-copy="${esc(item.url)}"
+                title="复制地址"><i class="bi bi-clipboard"></i></button>
+      </div>`);
+    });
+    if (data.token_enabled) {
+      rows.push('<div class="mt-2">已开启访问令牌：另一台电脑第一次打开时会要求输入，'
+        + '令牌就是下面「访问令牌」里填的那串。</div>');
+    } else {
+      rows.push('<div class="mt-2 warn-line">⚠ 没有设置访问令牌 —— 同一网络里的任何设备'
+        + '都能打开并操作（包括删文件）。建议在上面「访问令牌」里填一串随机字符。</div>');
+    }
+    const first = data.addresses[0];
+    if (first) {
+      rows.push(`<div class="mt-2">同一网络内，用手机也能打开：<code>${esc(first.url)}</code></div>`);
+    }
+  } else {
+    rows.push('<div class="mt-2">已开放，但没枚举到局域网地址 —— 请确认已连上网络，'
+      + '或在「监听地址」里直接填本机 IP。</div>');
+  }
+  if (data.platform === 'nt' && data.lan_enabled) {
+    rows.push('<div class="mt-2">Windows 首次开放时可能需要在防火墙弹窗里点「允许」，'
+      + '否则其它设备仍然连不上。</div>');
+  }
+  info.innerHTML = rows.join('');
+}
+
+function setListenHost(host) {
+  const input = $('#set-web_host');
+  if (!input) { toastErr('找不到监听地址字段'); return; }
+  input.value = host;
+  toastOk(`已把监听地址设为 ${host}，保存设置并重启服务后生效`);
 }
 
 function setCount(id, value) {

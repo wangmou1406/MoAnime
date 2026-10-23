@@ -20,6 +20,10 @@ TEMPLATE_DIR = os.path.join(ROOT_DIR, "templates")
 SETTINGS_FILE = os.path.join(DATA_DIR, "settings.json")
 # 数据库文件名与项目名保持一致（anime-downloader）
 DATABASE_FILE = os.path.join(DATA_DIR, "anime-downloader.db")
+
+# 局域网访问通过后种的 cookie 名（放在这里是为了让 app 与 settings 路由都能用，
+# 避免它们互相 import）
+TOKEN_COOKIE = "moanime_token"
 # 旧版本用的库名：首次启动若只发现旧库，会自动改名，避免丢掉已有数据
 LEGACY_DATABASE_FILE = os.path.join(DATA_DIR, "moanime.db")
 LOG_FILE = os.path.join(LOG_DIR, "app.log")
@@ -120,6 +124,9 @@ DEFAULT_SETTINGS = {
     "browser_resolver": True,
     "web_host": "127.0.0.1",
     "web_port": 8848,
+    # 局域网访问令牌：留空 = 不校验（只适合完全可信的网络）。
+    # 非空时，来自本机以外的请求必须带对令牌，否则只能看到提示页。
+    "access_token": "",
     # 默认不自动打开浏览器：只打印地址，避免去驱动你正在用的浏览器实例
     #（那个实例若以管理员权限运行，Windows 会弹「是否用普通权限重启」的对话框）
     "auto_open_browser": False,

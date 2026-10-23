@@ -26,6 +26,76 @@ def logs():
     return ok({"logs": recent_logs(limit=limit, after_id=after, level=level)})
 
 
+@api.get("/system/network")
+def system_network():
+    """当前监听状态与可访问地址，供设置页的「远程访问」面板展示。
+
+    任务/源/历史都只存在这一台机器的 SQLite 里，所以「另一台电脑能看到同样的内容」
+    靠的是同一个服务被多台机器访问，而不是同步。这里把该给用户看的地址都列出来。
+    """
+    import socket
+
+    host = str(config.get("web_host") or "127.0.0.1")
+    token = (config.get("access_token") or "").strip()
+
+    # 端口以「这次请求实际连上的端口」为准：命令行 --port 覆盖过配置时，
+    # 配置里的 web_port 是旧值，照着它拼出来的地址会打不开。
+    port = 0
+    host_header = request.host or ""
+    if ":" in host_header:
+        try:
+            port = int(host_header.rsplit(":", 1)[1])
+        except (TypeError, ValueError):
+            port = 0
+    port = port or int(config.get("web_port") or 8848)
+
+    def _primary_ip() -> str:
+        """默认路由用的那个地址（UDP connect 只是让内核选网卡，不发包）。"""
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            sock.connect(("8.8.8.8", 80))
+            return sock.getsockname()[0]
+        except OSError:
+            return ""
+        finally:
+            sock.close()
+
+    local_only = host in ("127.0.0.1", "localhost", "::1")
+    addresses = []
+    if not local_only:
+        primary = _primary_ip()
+        others = []
+        try:
+            for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+                ip = info[4][0]
+                if ip.startswith(("127.", "169.254.")):
+                    continue
+                if ip in [a["ip"] for a in addresses] or ip in others:
+                    continue
+                others.append(ip)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("枚举本机地址失败：%s", exc)
+
+        if primary and not primary.startswith("127."):
+            addresses.append({"ip": primary, "url": "http://%s:%d/" % (primary, port),
+                              "primary": True})
+        for ip in others:
+            if ip == primary:
+                continue
+            addresses.append({"ip": ip, "url": "http://%s:%d/" % (ip, port),
+                              "primary": False})
+
+    return ok({
+        "host": host,
+        "port": port,
+        "lan_enabled": not local_only,
+        "local_url": "http://127.0.0.1:%d/" % port,
+        "addresses": addresses,
+        "token_enabled": bool(token),
+        "platform": os.name,
+    })
+
+
 @api.delete("/logs")
 def clear_log():
     clear_logs()
