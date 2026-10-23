@@ -548,7 +548,17 @@ function installEvents() {
     }
     const button = e.target.closest('button[data-act]');
     if (!button) return;
-    if (button.dataset.act === 'play') {
+    if (button.dataset.act === 'check-episodes') {
+      e.preventDefault();
+      e.stopPropagation();
+      await checkEpisodeCount(button, null);
+    } else if (button.dataset.act === 'bili-season') {
+      e.preventDefault();
+      e.stopPropagation();
+      const card = button.closest('.lib-anime');
+      const trigger = card ? card.querySelector('button[data-act="check-episodes"]') : null;
+      if (trigger) await checkEpisodeCount(trigger, Number(button.dataset.season));
+    } else if (button.dataset.act === 'play') {
       openLocalPlayer(button.dataset.path, button.dataset.name);
     } else if (button.dataset.act === 'subtitle') {
       e.preventDefault();

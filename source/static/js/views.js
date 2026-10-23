@@ -587,11 +587,15 @@ views.library = function (data) {
           ? `<span class="slot-flag"><i class="bi bi-badge-cc"></i> ${subCount} 集有字幕</span>`
           : '<span class="slot-flag warn"><i class="bi bi-badge-cc"></i> 无字幕</span>'}
         <span class="spacer"></span>
+        <button class="btn btn-outline-light btn-sm" data-act="check-episodes"
+                data-anime="${esc(item.anime_name)}" title="用 B 站官方集数核对该番是否下全">
+          <i class="bi bi-check2-square"></i> 校验集数</button>
         <button class="btn btn-outline-light btn-sm" data-act="subtitle"
                 data-anime="${esc(item.anime_name)}" title="按集号搜索并下载字幕">
           <i class="bi bi-badge-cc"></i> 下载字幕</button>
         <i class="bi bi-chevron-down text-dim"></i>
       </summary>
+      <div class="lib-check" hidden></div>
       <div class="lib-eps">
         ${item.episodes.map((ep) => `
           <div class="lib-ep" title="${esc(ep.path)}">

@@ -13,6 +13,7 @@ from core.database import db
 from core.download_engine import find_ffmpeg
 from sources.manager import source_manager
 from core.subtitle import SubtitleError
+from core import bili
 from core import organizer
 from core import subtitle
 
@@ -132,6 +133,58 @@ def library_clean_missing():
     removed = db.clear_history_missing()
     logger.info("已清理 %d 条失效的下载历史", removed)
     return ok({"removed": removed})
+
+
+@api.route("/library/bili/check", methods=["GET", "POST"])
+def library_bili_check():
+    """用 B 站官方集数核对本地这一部番。
+
+    本地剧集名由服务端自己扫，不信任前端传进来的列表；
+    season_id 可选，用来在多个候选（第二季/剧场版）之间指定一个。
+    """
+    data = body()
+    anime_name = (data.get("anime_name") or "").strip()
+    if not anime_name:
+        return fail("缺少 anime_name")
+    season_id = data.get("season_id")
+    try:
+        season_id = int(season_id) if season_id else None
+    except (TypeError, ValueError):
+        season_id = None
+
+    names = _local_episode_names(anime_name)
+    try:
+        result = bili.check(anime_name, names, season_id=season_id)
+    except bili.BiliError as exc:
+        return fail("查询 B 站失败：%s" % exc)
+    result["local_files"] = len(names)
+    return ok(result)
+
+
+def _local_episode_names(anime_name: str) -> list:
+    """扫下载目录里这部番的视频文件名（不含后缀）。"""
+    base = config.download_dir()
+    folder = os.path.join(base, anime_name)
+    if not os.path.isdir(folder):
+        # 名字大小写/全半角不完全一致时，按规范化后的名字再找一次
+        target = anime_name.strip().lower()
+        if os.path.isdir(base):
+            for entry in os.listdir(base):
+                if entry.strip().lower() == target and os.path.isdir(os.path.join(base, entry)):
+                    folder = os.path.join(base, entry)
+                    break
+    if not os.path.isdir(folder):
+        return []
+
+    out = []
+    for root, _dirs, files in os.walk(folder):
+        for name in files:
+            if name.startswith("."):
+                continue
+            stem, ext = os.path.splitext(name)
+            if ext.lower() in (".mp4", ".mkv", ".ts", ".avi", ".flv", ".webm", ".m4v", ".rmvb"):
+                out.append(stem)
+    return sorted(out)
 
 
 @api.route("/library/organize/plan", methods=["GET", "POST"])
