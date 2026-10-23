@@ -20,7 +20,7 @@ import shutil
 
 from .config import config
 from .database import db
-from .naming import build_relative_path, normalize_scheme
+from .naming import build_episode_filename, build_relative_path, normalize_scheme
 from .utils import clean_text, episode_number, sanitize_filename
 
 VIDEO_EXTS = {".mp4", ".mkv", ".ts", ".avi", ".flv", ".webm", ".m4v", ".rmvb", ".mov"}
@@ -260,8 +260,11 @@ def _resolve(item: dict, default_season: int):
 
 
 def _target_relative(anime: str, episode: float, ext: str, scheme: str,
-                     season: int, default_season: int, force_season: bool = False) -> str:
+                     season: int, default_season: int, force_season: bool = False,
+                     season_dir: str = "") -> str:
     """按命名规则算出相对路径。
+
+    season_dir 非空时用它当季目录名（例如「下沙篇」），而不是 Season 01。
 
     有一处特例：simple / anime 这两种方案本身不体现季号，如果文件属于
     非默认季，直接压平会让「S02E06」和「S01E06」撞名。这种情况保留一层
@@ -270,6 +273,17 @@ def _target_relative(anime: str, episode: float, ext: str, scheme: str,
     force_season：按季整理时用。即使第 1 季也要放进 Season 01，
     否则同一部番有的季在子目录、有的散在根目录，看起来像没整理。
     """
+    if season_dir:
+        # 自定义季目录：番名/篇名/文件名
+        filename = build_episode_filename(
+            anime, _episode_name(episode), scheme, season, ext)
+        parts = []
+        if bool(config.get("organize_by_anime", True)):
+            parts.append(sanitize_filename(anime, 120))
+        parts.append(sanitize_filename(season_dir, 60))
+        parts.append(filename)
+        return os.path.join(*parts)
+
     relative = build_relative_path(anime, _episode_name(episode), ext, scheme, season)
     if scheme in ("simple", "anime") and (force_season or season != default_season):
         parts = relative.split(os.sep)
@@ -279,25 +293,30 @@ def _target_relative(anime: str, episode: float, ext: str, scheme: str,
     return relative
 
 
-def _season_from_rules(episode: float, counts) -> int:
-    """按「每季集数」算出集号属于第几季。
+def _season_from_rules(episode: float, rules) -> tuple:
+    """按规则算出集号属于第几季，返回 (季号, 自定义目录名)。
 
-    counts 例如 [100, 22]：1-100 属第 1 季，101-122 属第 2 季。
-    超出所有季的总和时，归到最后一季（通常是总集篇/特别篇）。
+    rules 是 parse_season_rules 的结果，例如
+        [{'name': '下沙篇', 'count': 13}, {'name': '王权篇', 'count': 14}]
+    1–13 属第 1 季（目录「下沙篇」），14–27 属第 2 季。
+    超出所有季总和时，归到最后一季（通常是总集篇/特别篇）。
     """
     number = int(episode)
     start = 1
-    for index, count in enumerate(counts or [], start=1):
+    for index, rule in enumerate(rules or [], start=1):
         try:
-            span = int(count)
+            span = int(rule.get("count"))
         except (TypeError, ValueError):
             continue
         if span <= 0:
             continue
         if number < start + span:
-            return index
+            return index, (rule.get("name") or "")
         start += span
-    return len(counts) if counts else 1
+    if rules:
+        last = rules[-1]
+        return len(rules), (last.get("name") or "")
+    return 1, ""
 
 
 def parse_season_counts(text) -> list:
@@ -320,6 +339,41 @@ def parse_season_counts(text) -> list:
     return out
 
 
+def parse_season_rules(value) -> list:
+    """把一条规则解析成 [{'name': 篇名或 None, 'count': 集数}, ...]。
+
+    支持两种写法：
+        [13, 14, 21]                                   → 季目录名 Season 01/02/03
+        [{'name': '下沙篇', 'count': 13}, ...]          → 季目录名就是篇名
+    也接受纯字符串 "13,14,21"。
+    """
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [{"name": "", "count": n} for n in parse_season_counts(value)]
+    if not isinstance(value, (list, tuple)):
+        return []
+
+    out = []
+    for item in value:
+        if isinstance(item, dict):
+            name = str(item.get("name") or "").strip()
+            try:
+                count = int(float(item.get("count")))
+            except (TypeError, ValueError):
+                continue
+            if count > 0:
+                out.append({"name": name, "count": count})
+        else:
+            try:
+                count = int(float(item))
+            except (TypeError, ValueError):
+                continue
+            if count > 0:
+                out.append({"name": "", "count": count})
+    return out
+
+
 def build_plan(download_dir: str = None, scheme: str = None, season: int = None,
                history_paths: dict = None, season_rules: dict = None,
                force_season: bool = False) -> dict:
@@ -335,7 +389,7 @@ def build_plan(download_dir: str = None, scheme: str = None, season: int = None,
     scheme = normalize_scheme(scheme or config.get("naming_scheme"))
     default_season = int(season if season is not None else config.get("default_season", 1) or 1)
     organize = bool(config.get("organize_by_anime", True))
-    rules = {str(k).strip(): parse_season_counts(v) for k, v in (season_rules or {}).items()}
+    rules = {str(k).strip(): parse_season_rules(v) for k, v in (season_rules or {}).items()}
     rules = {k: v for k, v in rules.items() if v}
     if rules:
         force_season = True
@@ -391,15 +445,17 @@ def build_plan(download_dir: str = None, scheme: str = None, season: int = None,
             items.append(_skip_item(video, base, "无法识别集数", entry["from_history"]))
             continue
 
-        # 用户给了「每季集数」就按集号区间定季，否则沿用目录/文件名里解析出来的季
+        # 用户给了分季规则就按集号区间定季，否则沿用目录/文件名里解析出来的季
         season_of_item = entry["season"]
+        season_dir = ""
         if anime in rules:
-            season_of_item = _season_from_rules(episode, rules[anime])
+            season_of_item, season_dir = _season_from_rules(episode, rules[anime])
             entry["season"] = season_of_item
 
         ext = video["ext"].lstrip(".")
         relative = _target_relative(anime, episode, ext, scheme,
-                                    season_of_item, default_season, force_season)
+                                    season_of_item, default_season, force_season,
+                                    season_dir)
         target = os.path.join(base, relative)
         reason = ""
 

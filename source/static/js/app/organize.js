@@ -169,25 +169,34 @@ async function applyOrganize() {
 let seasonRows = [];
 
 function parseSeasonCounts(text) {
+  // 支持两种写法：
+  //   13,14,21              → 目录名 Season 01 / 02 / 03
+  //   下沙篇:13,王权篇:14    → 目录名直接用篇名
   return String(text || '')
-    .split(/[,，\s/+]+/)
-    .map((item) => parseInt(item, 10))
-    .filter((value) => Number.isFinite(value) && value > 0);
+    .split(/[,，\n]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map((item) => {
+      const matched = item.match(/^(.+?)\s*[:：]\s*(\d+)$/);
+      if (matched) return { name: matched[1].trim(), count: parseInt(matched[2], 10) };
+      return { name: '', count: parseInt(item, 10) };
+    })
+    .filter((rule) => Number.isFinite(rule.count) && rule.count > 0);
 }
 
-function seasonOfEpisode(episode, counts) {
+function seasonOfEpisode(episode, rules) {
   let start = 1;
-  for (let index = 0; index < counts.length; index += 1) {
-    if (episode < start + counts[index]) return index + 1;
-    start += counts[index];
+  for (let index = 0; index < rules.length; index += 1) {
+    if (episode < start + rules[index].count) return index + 1;
+    start += rules[index].count;
   }
-  return counts.length;          // 超出总和时并到最后一季
+  return rules.length;          // 超出总和时并到最后一季
 }
 
-function previewSeasons(row, counts) {
+function previewSeasons(row, rules) {
   const buckets = {};
   (row.episodes || []).forEach((episode) => {
-    const season = counts.length ? seasonOfEpisode(episode, counts) : 1;
+    const season = rules.length ? seasonOfEpisode(episode, rules) : 1;
     buckets[season] = (buckets[season] || 0) + 1;
   });
   return buckets;
@@ -200,18 +209,21 @@ function updateSeasonPreview(rowEl) {
   const applyBtn = $('#btn-season-apply');
   if (!row || !preview) return;
 
-  const counts = parseSeasonCounts(rowEl.querySelector('.season-counts').value);
-  const buckets = previewSeasons(row, counts);
+  const rules = parseSeasonCounts(rowEl.querySelector('.season-counts').value);
+  const buckets = previewSeasons(row, rules);
   const keys = Object.keys(buckets).sort((a, b) => Number(a) - Number(b));
 
-  if (!counts.length) {
+  if (!rules.length) {
     preview.className = 'season-preview';
     preview.textContent = '未填 → 全部归到第 1 季';
     return;
   }
 
-  const parts = keys.map((key) => `S${key}: ${buckets[key]} 集`);
-  const sum = counts.reduce((acc, value) => acc + value, 0);
+  const parts = keys.map((key) => {
+    const rule = rules[Number(key) - 1] || {};
+    return `${rule.name || 'S' + key}: ${buckets[key]} 集`;
+  });
+  const sum = rules.reduce((acc, rule) => acc + rule.count, 0);
   preview.textContent = parts.join(' · ');
   if (sum < row.max) {
     preview.className = 'season-preview warn';
@@ -234,7 +246,7 @@ function renderSeasonRows() {
         <span class="sm">${row.count} 个文件 · 第 ${row.min}–${row.max} 集</span>
       </div>
       <input class="form-control form-control-sm season-counts"
-             placeholder="每季集数，如 100,22" autocomplete="off">
+             placeholder="13,14,21 或 下沙篇:13,王权篇:14" autocomplete="off">
       <button class="btn btn-outline-light btn-sm" data-act="season-autofill"
               title="去 B 站查这个系列有几季、每季多少集">
         <i class="bi bi-cloud-download"></i> 自动爬取</button>
@@ -295,7 +307,15 @@ async function autoFillSeasons(button) {
           : 'B 站查不到这个系列的分季信息');
       return;
     }
-    rowEl.querySelector('.season-counts').value = data.counts.join(',');
+    // 用「篇名:集数」的写法填进去，目录名就是篇名而不是 Season 01
+    const series = (data.series_title || '').trim();
+    const parts = (data.seasons || []).map((season, index) => {
+      let name = (season.title || '').trim();
+      if (series && name.startsWith(series)) name = name.slice(series.length).trim();
+      if (!name) name = `S${index + 1}`;
+      return `${name}:${season.total}`;
+    });
+    rowEl.querySelector('.season-counts').value = parts.join(',');
     updateSeasonPreview(rowEl);
     const titles = data.seasons.map((s) => `${s.title}(${s.total})`).join(' / ');
     toastOk(`${anime}：B 站 ${data.counts.length} 季 共 ${data.total} 集 — ${titles}`);
