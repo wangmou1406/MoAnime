@@ -358,6 +358,17 @@ class Database:
         rows = self.query("SELECT anime_name, episode_name, path FROM history")
         return {(row["anime_name"], row["episode_name"]): (row["path"] or "") for row in rows}
 
+    def update_history_path(self, old_path: str, new_path: str) -> int:
+        """把历史记录里的旧路径改成新路径（自动整理改名后调用）。
+
+        按路径精确匹配 —— 同一集的记录可能有多条，只改真正搬动的那条。
+        返回改动的行数。
+        """
+        if not old_path or not new_path or old_path == new_path:
+            return 0
+        cursor = self.execute("UPDATE history SET path = ? WHERE path = ?", (new_path, old_path))
+        return cursor.rowcount if cursor is not None else 0
+
     def clear_history_missing(self) -> int:
         """删除历史中「文件已不存在」的记录（用户在系统里删了视频时用）。"""
         rows = self.query("SELECT id, path FROM history")

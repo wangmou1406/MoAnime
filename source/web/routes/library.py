@@ -13,6 +13,7 @@ from core.database import db
 from core.download_engine import find_ffmpeg
 from sources.manager import source_manager
 from core.subtitle import SubtitleError
+from core import organizer
 from core import subtitle
 
 # 跨模块引用
@@ -131,6 +132,43 @@ def library_clean_missing():
     removed = db.clear_history_missing()
     logger.info("已清理 %d 条失效的下载历史", removed)
     return ok({"removed": removed})
+
+
+@api.route("/library/organize/plan", methods=["GET", "POST"])
+def library_organize_plan():
+    """生成番剧整理计划（只看不动文件）。"""
+    data = body()
+    plan = organizer.build_plan(
+        scheme=data.get("scheme"),
+        season=data.get("season"),
+        history_paths=organizer.history_index(),
+    )
+    return ok(plan)
+
+
+@api.route("/library/organize/apply", methods=["POST"])
+def library_organize_apply():
+    """执行整理：重新算一遍计划再动文件，不接受前端传来的路径。
+
+    重新算一遍而不是用前端回传的计划，是为了避免客户端塞进
+    下载目录之外的目标路径。
+    """
+    data = body()
+    plan = organizer.build_plan(
+        scheme=data.get("scheme"),
+        season=data.get("season"),
+        history_paths=organizer.history_index(),
+    )
+    if not plan["stats"]["move"]:
+        logger.info("自动整理：没有需要移动的文件")
+        return ok({"moved": [], "failed": [], "skipped": [],
+                   "pruned_dirs": 0, "stats": plan["stats"]})
+
+    result = organizer.apply_plan(plan)
+    stats = result["stats"]
+    logger.info("自动整理完成：移动 %d 个、失败 %d 个、跳过 %d 个，清理空目录 %d 个",
+                stats["moved"], stats["failed"], stats["skipped"], result["pruned_dirs"])
+    return ok(result)
 
 
 @api.route("/subtitle/sources", methods=["GET", "POST"])

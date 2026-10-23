@@ -517,6 +517,18 @@ function installEvents() {
     });
   }
   $('#btn-library-open').addEventListener('click', openDownloadDir);
+
+  /* 自动整理：扫描出计划 → 核对 → 执行 */
+  const orgBtn = $('#btn-library-organize');
+  if (orgBtn) {
+    orgBtn.addEventListener('click', openOrganize);
+    const orgRescan = $('#btn-organize-rescan');
+    if (orgRescan) orgRescan.addEventListener('click', loadOrganizePlan);
+    const orgScheme = $('#organize-scheme');
+    if (orgScheme) orgScheme.addEventListener('change', loadOrganizePlan);
+    const orgApply = $('#btn-organize-apply');
+    if (orgApply) orgApply.addEventListener('click', applyOrganize);
+  }
   $('#library-filter').addEventListener('input', debounce((e) => {
     const keyword = e.target.value.trim().toLowerCase();
     $$('#library-list .lib-anime').forEach((card) => {

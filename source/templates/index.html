@@ -323,6 +323,7 @@
         </div>
         <div class="ops">
           <button class="btn btn-outline-light btn-sm" id="btn-library-refresh"><i class="bi bi-arrow-clockwise"></i> 重新扫描</button>
+          <button class="btn btn-outline-light btn-sm" id="btn-library-organize"><i class="bi bi-magic"></i> 自动整理</button>
           <button class="btn btn-outline-light btn-sm" id="btn-library-clean"><i class="bi bi-eraser"></i> 清理失效记录</button>
           <button class="btn btn-outline-light btn-sm" id="btn-library-open"><i class="bi bi-folder2-open"></i> 打开目录</button>
         </div>
@@ -646,6 +647,52 @@
   </div>
 </div>
 
+<!-- ============================ 自动整理 ============================ -->
+<div class="modal fade" id="modal-organize" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-magic"></i> 自动整理番剧</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-2 align-items-end mb-3">
+          <div class="col-auto">
+            <label class="form-label" for="organize-scheme">命名方案</label>
+            <select class="form-select form-select-sm" id="organize-scheme"></select>
+          </div>
+          <div class="col-auto">
+            <label class="form-label" for="organize-season">默认季</label>
+            <input type="number" min="1" max="99" class="form-control form-control-sm"
+                   id="organize-season" value="1" style="width:84px">
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-outline-light btn-sm" id="btn-organize-rescan">
+              <i class="bi bi-arrow-clockwise"></i> 重新扫描
+            </button>
+          </div>
+          <div class="col text-end">
+            <span class="badge badge-dim" id="organize-summary">扫描中…</span>
+          </div>
+        </div>
+        <div class="hint-box mb-3">
+          只移动和改名，<strong>不会删除任何文件</strong>。正在下载的 <code>.tmp</code>
+          与未完成的 <code>.part</code> 会自动跳过；外挂字幕会跟着视频一起改名。
+          同一集有多份时，体积大的保留标准名，其余加 <code> (2)</code>。
+          确认无误后再点「执行整理」。
+        </div>
+        <div id="organize-list" class="org-list">
+          <div class="org-empty">扫描中…</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-light btn-sm" data-bs-dismiss="modal">取消</button>
+        <button class="btn btn-primary btn-sm" id="btn-organize-apply" disabled>执行整理</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ============================ 字幕 ============================ -->
 <div class="modal fade" id="modal-subtitle" tabindex="-1">
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -853,6 +900,7 @@
 <script src="/static/js/app/player.js?v={{ version }}"></script>
 <script src="/static/js/app/subtitles.js?v={{ version }}"></script>
 <script src="/static/js/app/tasks.js?v={{ version }}"></script>
+<script src="/static/js/app/organize.js?v={{ version }}"></script>
 <script src="/static/js/app/events.js?v={{ version }}"></script>
 <script src="/static/js/app/main.js?v={{ version }}"></script>
 </body>
