@@ -357,14 +357,36 @@ def series_seasons(anime_name: str, season_id: int = None) -> dict:
         seen.add(item["season_id"])
         unique.append(item)
 
+    # 可靠性判定：B 站的分季数据常常掺衍生作（名侦探柯南会把「零的日常」
+    # 「犯人犯泽先生」当成季）。主篇集数未知（-1，连载中）或各季合计
+    # 明显对不上主篇时，这份数据不能用，宁可让用户手填。
+    total = sum(item["total"] for item in unique)
+    base_total = int(detail.get("total") or 0)
+    reliable = True
+    reason = ""
+    if not unique:
+        reliable = False
+        reason = "这一系列在 B 站只有一季，没有可拆的分季信息"
+    elif len(unique) == 1:
+        reliable = False
+        reason = "B 站只有 1 季（%d 集），没有分季可拆" % unique[0]["total"]
+    elif base_total <= 0:
+        reliable = False
+        reason = "B 站的主篇集数未知（可能是连载中），分季数据不可信"
+    elif total < base_total * 0.8:
+        reliable = False
+        reason = ("分季合计只有 %d 集，但主篇是 %d 集 —— 分季数据可能只覆盖了衍生作"
+                  % (total, base_total))
+
     return {
         "found": bool(unique),
         "series_title": detail.get("series_title") or "",
         "base": {"season_id": detail["season_id"], "title": detail["title"],
                  "total": detail["total"]},
         "seasons": unique,
-        "total": sum(item["total"] for item in unique),
-        "reason": "" if unique else "这一系列在 B 站只有一季,没有可拆的分季信息",
+        "total": total,
+        "reliable": reliable,
+        "reason": reason,
     }
 
 

@@ -224,7 +224,8 @@ def library_organize_suggest():
         "seasons": info.get("seasons") or [],
         "counts": counts,
         "total": sum(counts),
-        "splittable": len(counts) > 1,
+        "reliable": info.get("reliable", False),
+        "splittable": len(counts) > 1 and info.get("reliable", False),
     })
 
 
