@@ -535,16 +535,7 @@ function openAnimeDelete(animeName) {
 async function doAnimeDelete(deleteFile) {
   const animeName = pendingAnimeDelete;
   if (!animeName) return;
-  if (deleteFile) {
-    const typed = prompt(
-      `连文件一起删会永久删除「${animeName}」的整个文件夹。\n\n`
-      + '确认请输入番剧名：');
-    if (typed === null) return;
-    if (typed.trim() !== animeName) {
-      toastWarn('输入的番剧名不一致，已取消');
-      return;
-    }
-  }
+  // 不做二次确认：弹窗里点了「连文件一起删」就直接删
 
   const button = $(deleteFile ? '#btn-anime-delete-files' : '#btn-anime-delete-records');
   const original = button.innerHTML;
