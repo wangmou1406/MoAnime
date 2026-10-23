@@ -432,8 +432,7 @@ async function loadDedupPlan() {
   if (!box) return;
   box.innerHTML = '<div class="org-empty">扫描中…</div>';
   summary.textContent = '扫描中…';
-  $('#btn-dedup-move').disabled = true;
-  $('#btn-dedup-delete').disabled = true;
+  $('#btn-dedup-apply').disabled = true;
   dedupPlan = null;
 
   const resp = await api('/api/library/dedup/plan', 'POST', {});
@@ -474,36 +473,26 @@ function renderDedup(plan) {
       </div>`).join('')}
   `).join('');
 
-  $('#btn-dedup-move').disabled = false;
-  $('#btn-dedup-delete').disabled = false;
+  $('#btn-dedup-apply').disabled = false;
 }
 
-async function applyDedup(action) {
+async function applyDedup() {
   if (!dedupPlan || !dedupPlan.stats.groups) return;
-  const stats = dedupPlan.stats;
-  if (action === 'delete') {
-    if (!confirm(`直接删除 ${stats.duplicates} 个文件（${fmtSize(stats.bytes)}）？\n\n`
-      + '删除不可恢复。不确定就先选「移到 _重复」。')) return;
-  } else if (!confirm(`把 ${stats.duplicates} 个多余文件移到 _重复/？\n\n不会删除，随时能拿回来。`)) {
-    return;
-  }
-
-  const button = $(action === 'delete' ? '#btn-dedup-delete' : '#btn-dedup-move');
+  // 直接删，不做二次确认
+  const button = $('#btn-dedup-apply');
   const original = button.innerHTML;
   button.disabled = true;
-  button.innerHTML = '<i class="bi bi-hourglass-split"></i> 处理中…';
+  button.innerHTML = '<i class="bi bi-hourglass-split"></i> 删除中…';
   try {
-    const resp = await api('/api/library/dedup/apply', 'POST', { action });
+    const resp = await api('/api/library/dedup/apply', 'POST', { action: 'delete' });
     if (!resp.ok) { toastErr(resp.error); return; }
     const data = resp.data || {};
     const done = (data.stats || {}).handled || 0;
     const failed = (data.stats || {}).failed || 0;
     if (failed) {
-      toastWarn(`去重完成：处理 ${done} 个，失败 ${failed} 个（详情见日志）`);
+      toastWarn(`去重完成：删除 ${done} 个，失败 ${failed} 个（详情见日志）`);
     } else {
-      toastOk(action === 'delete'
-        ? `已删除 ${done} 个重复文件`
-        : `已把 ${done} 个重复文件移到 _重复/`);
+      toastOk(`已删除 ${done} 个重复文件`);
     }
     await loadDedupPlan();
     await loadLibrary();

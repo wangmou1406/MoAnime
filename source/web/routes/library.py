@@ -305,11 +305,11 @@ def library_organize_apply():
     stats = result["stats"]
 
     # 整理完顺手去重：重下/换源会在同一集堆出多份，留体积最大的那份，
-    # 其余挪到 _重复/（不删除）。可以在设置里关掉。
+    # 其余直接删掉。可以在设置里关掉。
     dedup_stats = None
     if bool(config.get("dedup_on_organize", True)):
         try:
-            dedup_result = dedup.apply(action="move")
+            dedup_result = dedup.apply(action="delete")
             dedup_stats = dedup_result["stats"]
             result["dedup"] = dedup_stats
         except Exception as exc:  # noqa: BLE001
@@ -319,7 +319,7 @@ def library_organize_apply():
     logger.info("自动整理完成：移动 %d 个、失败 %d 个、跳过 %d 个，清理空目录 %d 个",
                 stats["moved"], stats["failed"], stats["skipped"], result["pruned_dirs"])
     if dedup_stats:
-        logger.info("自动去重：多余 %d 个（%.1f MB）已移到 _重复",
+        logger.info("自动去重：删除重复 %d 个（%.1f MB）",
                     dedup_stats["handled"], dedup_stats["bytes"] / 1024 / 1024)
     return ok(result)
 

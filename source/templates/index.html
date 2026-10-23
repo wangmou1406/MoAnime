@@ -779,9 +779,10 @@
       </div>
       <div class="modal-body">
         <div class="hint-box mb-3">
-          同一部番的同一集有多份时，只留体积最大的那份（残片通常只有正常文件的一小截）。
-          体积相同时留已经归档进季目录的那份。<br>
-          默认<b>只移动不删除</b>：多余的挪到下载目录下的 <code>_重复/</code>，随时能拿回来。
+          同一部番的同一集有多份时，只留体积最大的那份（残片通常只有正常文件的一小截），
+          其余<span class="warn-text">直接删除</span>。体积相同时留已经归档进季目录的那份。<br>
+          判重看「番名 + 集号」，所以 <code>第29集.mp4</code> / <code>第29集 (2).mp4</code>
+          会被认成一组。
         </div>
         <div class="d-flex align-items-center gap-2 mb-2">
           <span class="badge badge-dim" id="dedup-summary">扫描中…</span>
@@ -793,10 +794,8 @@
       </div>
       <div class="modal-footer">
         <button class="btn btn-outline-light btn-sm" data-bs-dismiss="modal">取消</button>
-        <button class="btn btn-outline-danger btn-sm" id="btn-dedup-delete" disabled>
-          <i class="bi bi-trash3"></i> 直接删除</button>
-        <button class="btn btn-primary btn-sm" id="btn-dedup-move" disabled>
-          <i class="bi bi-folder-symlink"></i> 移到 _重复</button>
+        <button class="btn btn-danger btn-sm" id="btn-dedup-apply" disabled>
+          <i class="bi bi-trash3"></i> 删除重复</button>
       </div>
     </div>
   </div>

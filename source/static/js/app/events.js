@@ -569,16 +569,14 @@ function installEvents() {
     if (arcBtn) arcBtn.addEventListener('click', parseArcText);
   }
 
-  /* 去重：同一集多份 → 只留一份 */
+  /* 去重：同一集多份 → 只留一份，其余直接删 */
   const dedupBtn = $('#btn-library-dedup');
   if (dedupBtn) {
     dedupBtn.addEventListener('click', openDedup);
     const rescan = $('#btn-dedup-rescan');
     if (rescan) rescan.addEventListener('click', loadDedupPlan);
-    const moveBtn = $('#btn-dedup-move');
-    if (moveBtn) moveBtn.addEventListener('click', () => applyDedup('move'));
-    const delBtn = $('#btn-dedup-delete');
-    if (delBtn) delBtn.addEventListener('click', () => applyDedup('delete'));
+    const dedupApply = $('#btn-dedup-apply');
+    if (dedupApply) dedupApply.addEventListener('click', applyDedup);
   }
 
   /* 删除整部番 */
