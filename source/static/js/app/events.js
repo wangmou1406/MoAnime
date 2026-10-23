@@ -580,6 +580,12 @@ function installEvents() {
     const delBtn = $('#btn-dedup-delete');
     if (delBtn) delBtn.addEventListener('click', () => applyDedup('delete'));
   }
+
+  /* 删除整部番 */
+  const delRecords = $('#btn-anime-delete-records');
+  if (delRecords) delRecords.addEventListener('click', () => doAnimeDelete(false));
+  const delFiles = $('#btn-anime-delete-files');
+  if (delFiles) delFiles.addEventListener('click', () => doAnimeDelete(true));
   $('#library-filter').addEventListener('input', debounce((e) => {
     const keyword = e.target.value.trim().toLowerCase();
     $$('#library-list .lib-anime').forEach((card) => {
@@ -603,6 +609,10 @@ function installEvents() {
       e.preventDefault();
       e.stopPropagation();
       await checkEpisodeCount(button, null);
+    } else if (button.dataset.act === 'delete-anime') {
+      e.preventDefault();
+      e.stopPropagation();
+      openAnimeDelete(button.dataset.anime);
     } else if (button.dataset.act === 'bili-season') {
       e.preventDefault();
       e.stopPropagation();

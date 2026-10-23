@@ -742,6 +742,33 @@
   </div>
 </div>
 
+<!-- ============================ 删除整部番 ============================ -->
+<div class="modal fade" id="modal-anime-delete" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-trash3"></i> 删除番剧</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-2"><b id="anime-delete-name"></b></div>
+        <div class="hint-box mb-2">
+          <b>只删记录</b>：清掉番剧库里的条目和下载历史，磁盘上的视频留着，重新扫描还能找回来。<br>
+          <b>连文件一起删</b>：把下载目录里这部番的整个文件夹删掉，<span class="warn-text">不可恢复</span>。
+        </div>
+        <div class="text-dim" id="anime-delete-info" style="font-size:12px"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-light btn-sm" data-bs-dismiss="modal">取消</button>
+        <button class="btn btn-outline-light btn-sm" id="btn-anime-delete-records">
+          <i class="bi bi-eraser"></i> 只删记录</button>
+        <button class="btn btn-danger btn-sm" id="btn-anime-delete-files">
+          <i class="bi bi-trash3"></i> 连文件一起删</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ============================ 去重 ============================ -->
 <div class="modal fade" id="modal-dedup" tabindex="-1">
   <div class="modal-dialog modal-xl modal-dialog-scrollable">

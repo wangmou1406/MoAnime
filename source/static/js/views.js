@@ -566,6 +566,7 @@ views.updateTaskRows = function (tasks) {
 views.library = function (data) {
   const box = $('#library-list');
   const items = (data.items || []).filter((i) => i.episode_count);
+  state.libraryItems = items;          // 删除弹窗要显示集数和体积
   const totalSubs = items.reduce((sum, item) =>
     sum + item.episodes.filter((e) => (e.subtitles || []).length).length, 0);
   $('#library-summary').textContent = `${items.length} 部 · ${fmtSize(data.total_size)}`
@@ -593,6 +594,9 @@ views.library = function (data) {
         <button class="btn btn-outline-light btn-sm" data-act="subtitle"
                 data-anime="${esc(item.anime_name)}" title="按集号搜索并下载字幕">
           <i class="bi bi-badge-cc"></i> 下载字幕</button>
+        <button class="btn btn-outline-light btn-sm btn-icon" data-act="delete-anime"
+                data-anime="${esc(item.anime_name)}" title="删除这部番（整部）">
+          <i class="bi bi-trash3"></i></button>
         <i class="bi bi-chevron-down text-dim"></i>
       </summary>
       <div class="lib-check" hidden></div>

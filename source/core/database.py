@@ -386,6 +386,19 @@ class Database:
     def delete_history(self, history_id: int) -> None:
         self.execute("DELETE FROM history WHERE id = ?", (history_id,))
 
+    def delete_history_anime(self, anime_name: str) -> int:
+        """删掉某部番的全部下载历史（删整部番时用）。"""
+        cursor = self.execute("DELETE FROM history WHERE anime_name = ?", (anime_name,))
+        return cursor.rowcount if cursor is not None else 0
+
+    def delete_tasks_anime(self, anime_name: str) -> int:
+        """删掉某部番的全部任务记录（删整部番时用，避免任务栏还挂着已删的番）。"""
+        cursor = self.execute("DELETE FROM tasks WHERE anime_name = ?", (anime_name,))
+        return cursor.rowcount if cursor is not None else 0
+
+    def tasks_of_anime(self, anime_name: str) -> list:
+        return self.query("SELECT * FROM tasks WHERE anime_name = ?", (anime_name,))
+
     # ------------------------------------------------------------ 搜索历史
     def add_search_history(self, keyword: str) -> None:
         keyword = (keyword or "").strip()

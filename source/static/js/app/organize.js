@@ -512,3 +512,63 @@ async function applyDedup(action) {
     button.innerHTML = original;
   }
 }
+/* ============================================================
+   删除整部番
+
+   两种模式：只删记录（文件留着）/ 连文件一起删。
+   「连文件一起删」需要二次确认，且后端会拒绝删除下载目录本身。
+   ============================================================ */
+
+let pendingAnimeDelete = '';
+
+function openAnimeDelete(animeName) {
+  if (!animeName) return;
+  pendingAnimeDelete = animeName;
+  $('#anime-delete-name').textContent = animeName;
+  const item = (state.libraryItems || []).find((it) => it.anime_name === animeName);
+  $('#anime-delete-info').textContent = item
+    ? `本地 ${item.episode_count} 个文件 · ${fmtSize(item.size)}`
+    : '';
+  showModal('modal-anime-delete');
+}
+
+async function doAnimeDelete(deleteFile) {
+  const animeName = pendingAnimeDelete;
+  if (!animeName) return;
+  if (deleteFile) {
+    const typed = prompt(
+      `连文件一起删会永久删除「${animeName}」的整个文件夹。\n\n`
+      + '确认请输入番剧名：');
+    if (typed === null) return;
+    if (typed.trim() !== animeName) {
+      toastWarn('输入的番剧名不一致，已取消');
+      return;
+    }
+  }
+
+  const button = $(deleteFile ? '#btn-anime-delete-files' : '#btn-anime-delete-records');
+  const original = button.innerHTML;
+  button.disabled = true;
+  button.innerHTML = '<i class="bi bi-hourglass-split"></i> 处理中…';
+  try {
+    const resp = await api('/api/library/delete-anime', 'POST', {
+      anime_name: animeName,
+      delete_file: !!deleteFile,
+    });
+    if (!resp.ok) { toastErr(resp.error); return; }
+    const data = resp.data || {};
+    if (deleteFile) {
+      toastOk(`已删除「${animeName}」：${data.files} 个文件（${fmtSize(data.bytes)}）`);
+    } else {
+      toastOk(`已清掉「${animeName}」的记录（${data.history} 条历史、${data.tasks} 条任务），文件保留`);
+    }
+    hideModal('modal-anime-delete');
+    pendingAnimeDelete = '';
+    await loadLibrary();
+  } catch (err) {
+    toastErr(`删除失败：${err}`);
+  } finally {
+    button.disabled = false;
+    button.innerHTML = original;
+  }
+}

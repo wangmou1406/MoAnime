@@ -6,6 +6,7 @@
 
 import os
 import re
+import shutil
 import subprocess
 from flask import Response, request, send_file
 from core.config import DATA_DIR, config
@@ -729,6 +730,76 @@ def video_thumbnail_file(name: str):
     if not safe.lower().endswith(".jpg") or not os.path.isfile(path):
         return fail("预览图不存在", 404)
     return send_file(path, mimetype="image/jpeg", max_age=3600)
+
+
+@api.post("/library/delete-anime")
+def library_delete_anime():
+    """删掉一整部番。
+
+    两种模式：
+        delete_file = false  只清记录（历史 + 任务），磁盘文件留着
+        delete_file = true   连下载目录里这部番的文件夹一起删
+    有正在下载/排队的任务时直接拒绝 —— 否则删到一半后台还在写，会留下残片。
+    """
+    data = body()
+    anime_name = (data.get("anime_name") or "").strip()
+    if not anime_name:
+        return fail("缺少 anime_name")
+    delete_file = bool(data.get("delete_file", False))
+
+    # 正在跑的不让删
+    busy = [t for t in db.tasks_of_anime(anime_name)
+            if str(t.get("status") or "") in ("running", "queued", "paused")]
+    if busy:
+        return fail("这部番还有 %d 个任务在下载/排队/暂停，先停掉再删" % len(busy), 409)
+
+    base = os.path.abspath(config.download_dir())
+    removed_files = 0
+    removed_bytes = 0
+    folder_deleted = ""
+
+    if delete_file:
+        folder = os.path.abspath(os.path.join(base, anime_name))
+        # 只允许删下载目录下的一级子目录，防止 ../ 或空名字把整个下载目录带走
+        if os.path.dirname(folder) != base or not os.path.isdir(folder):
+            return fail("找不到这部番的文件夹：%s" % folder, 404)
+        if not _inside_download_dir(folder) or folder == base:
+            return fail("拒绝删除下载目录本身", 403)
+        for root, _dirs, files in os.walk(folder):
+            for name in files:
+                try:
+                    removed_bytes += os.path.getsize(os.path.join(root, name))
+                    removed_files += 1
+                except OSError:
+                    continue
+        try:
+            shutil.rmtree(folder)
+            folder_deleted = folder
+        except OSError as exc:
+            return fail("删除文件夹失败：%s" % exc, 500)
+
+        # 去重回收站里同一部番的也一起清掉
+        dup_folder = os.path.join(base, "_重复", anime_name)
+        if os.path.isdir(dup_folder) and _inside_download_dir(dup_folder):
+            try:
+                shutil.rmtree(dup_folder)
+            except OSError as exc:
+                logger.warning("清理 _重复 里的 %s 失败：%s", anime_name, exc)
+
+    removed_history = db.delete_history_anime(anime_name)
+    removed_tasks = db.delete_tasks_anime(anime_name)
+    logger.info("删除番剧 %s：文件 %d 个（%.1f MB）、历史 %d 条、任务 %d 条%s",
+                anime_name, removed_files, removed_bytes / 1024 / 1024,
+                removed_history, removed_tasks,
+                "，文件夹已删除" if folder_deleted else "，文件保留")
+    return ok({
+        "anime_name": anime_name,
+        "deleted_folder": folder_deleted,
+        "files": removed_files,
+        "bytes": removed_bytes,
+        "history": removed_history,
+        "tasks": removed_tasks,
+    })
 
 
 @api.post("/library/delete")
