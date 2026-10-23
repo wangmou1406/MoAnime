@@ -193,6 +193,21 @@ def _local_episode_names(anime_name: str) -> list:
     return sorted(out)
 
 
+@api.route("/library/organize/parse-arcs", methods=["POST"])
+def library_organize_parse_arcs():
+    """把用户从网页复制的分篇文字解析成「篇名 + 集数」规则。
+
+    萌娘百科/豆瓣/粉丝整理的表都能贴：网页本身从程序这边抓不到
+    （Cloudflare + 匿名 API 被禁），所以让用户复制一段文字过来最省事。
+    """
+    data = body()
+    text = data.get("text") or ""
+    if not str(text).strip():
+        return fail("没有收到文本")
+    result = organizer.parse_arc_text(str(text)[:20000])
+    return ok(result)
+
+
 @api.route("/library/organize/suggest", methods=["GET", "POST"])
 def library_organize_suggest():
     """自动爬取一部番的分季信息，换算成「每季集数」。

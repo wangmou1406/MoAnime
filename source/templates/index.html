@@ -715,6 +715,23 @@
           只移动和改名，不会删除文件。
         </div>
         <div id="season-rows"><div class="org-empty">扫描中…</div></div>
+        <details class="arc-import mt-3">
+          <summary>从网页粘贴分篇表（萌娘百科 / 豆瓣 / 粉丝整理都行）</summary>
+          <div class="mt-2">
+            <textarea class="form-control form-control-sm" id="arc-text" rows="5"
+                      placeholder="把「各篇播出信息」整段贴进来，例如：&#10;《下沙篇》…共13话。&#10;《王权篇》…共14话（第14～27话）。"></textarea>
+            <div class="d-flex gap-2 align-items-center mt-2 flex-wrap">
+              <select class="form-select form-select-sm" id="arc-target" style="width:230px"></select>
+              <button class="btn btn-outline-light btn-sm" id="btn-arc-parse">
+                <i class="bi bi-clipboard-check"></i> 解析并填入</button>
+              <span class="text-dim" id="arc-result" style="font-size:12px"></span>
+            </div>
+            <div class="text-dim mt-1" style="font-size:11.5px">
+              只要句子里有「《篇名》……共 N 话」或「篇名 N」就能认出来；
+              剧场版/总集篇这类单集特典会自动跳过。
+            </div>
+          </div>
+        </details>
       </div>
       <div class="modal-footer">
         <button class="btn btn-outline-light btn-sm" data-bs-dismiss="modal">取消</button>

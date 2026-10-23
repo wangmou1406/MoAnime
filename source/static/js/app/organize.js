@@ -283,6 +283,7 @@ async function openSeasonSplit() {
     };
   }).sort((a, b) => a.anime.localeCompare(b.anime, 'zh'));
   renderSeasonRows();
+  renderArcTargets();
 }
 
 async function autoFillSeasons(button) {
@@ -364,5 +365,49 @@ async function applySeasonSplit() {
   } finally {
     button.disabled = false;
     button.textContent = '按季整理';
+  }
+}
+/* 从粘贴的分篇表解析规则并填进指定番剧 */
+function renderArcTargets() {
+  const sel = $('#arc-target');
+  if (!sel) return;
+  sel.innerHTML = seasonRows
+    .map((row) => `<option value="${esc(row.anime)}">${esc(row.anime)}（${row.count} 集）</option>`)
+    .join('');
+}
+
+async function parseArcText() {
+  const text = ($('#arc-text') || {}).value || '';
+  const target = ($('#arc-target') || {}).value || '';
+  const box = $('#arc-result');
+  if (!text.trim()) { toastWarn('先把分篇文字贴进输入框'); return; }
+  if (!target) { toastWarn('先打开一次按季整理，让它扫描出番剧'); return; }
+
+  const button = $('#btn-arc-parse');
+  const original = button ? button.innerHTML : '';
+  if (button) { button.disabled = true; button.innerHTML = '<i class="bi bi-hourglass-split"></i> 解析中…'; }
+  try {
+    const resp = await api('/api/library/organize/parse-arcs', 'POST', { text });
+    if (!resp.ok) { toastErr(resp.error); return; }
+    const data = resp.data || {};
+    const rules = data.rules || [];
+    if (!rules.length) {
+      if (box) box.textContent = '没认出任何「篇名 + 集数」，检查一下粘贴的内容';
+      return;
+    }
+    const rowEl = $$('#season-rows .season-row').find((el) => el.dataset.anime === target);
+    if (!rowEl) { toastErr('找不到这一部番'); return; }
+    rowEl.querySelector('.season-counts').value =
+      rules.map((rule) => `${rule.name}:${rule.count}`).join(',');
+    updateSeasonPreview(rowEl);
+    if (box) {
+      box.textContent = `认出 ${rules.length} 段 · 合计 ${data.total} 集`
+        + (data.skipped ? ` · 跳过 ${data.skipped} 条特典` : '');
+    }
+    toastOk(`已填入 ${rules.length} 段`);
+  } catch (err) {
+    toastErr(`解析失败：${err}`);
+  } finally {
+    if (button) { button.disabled = false; button.innerHTML = original; }
   }
 }

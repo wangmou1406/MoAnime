@@ -374,6 +374,70 @@ def parse_season_rules(value) -> list:
     return out
 
 
+def parse_arc_text(text: str) -> dict:
+    """从网页上复制的分篇文字里解析出「篇名 + 集数」。
+
+    能吃的格式（混在一起也行）：
+        《下沙篇》于2015年6月26日～11月27日播出，共13话。
+        《王权篇》……共14话（第14～27话）。
+        下沙篇 13
+        下沙篇:13
+    只要句子里有「《篇名》……共 N 话」或「篇名 数字」，就能认出来。
+
+    会跳过剧场版/总集篇这类单集特典 —— 它们不是新的一季。判据是
+    「行里提到剧场版/总集篇，且集数 ≤ 3」：像下沙篇那种正文末尾顺带提一句
+    「放出剧场总集篇」的行不会被误杀。
+    """
+    lines = [line.strip() for line in str(text or "").splitlines() if line.strip()]
+    rules = []
+    skipped = 0
+    seen = set()
+
+    titled = re.compile(r"《(?P<name>[^》]{1,24})》[^\n]{0,160}?共\s*(?P<count>\d{1,4})\s*[话話集]")
+    ranged = re.compile(r"《(?P<name>[^》]{1,24})》[^\n]{0,160}?第\s*\d{1,4}\s*[～~至\-—]\s*(?P<end>\d{1,4})\s*[话話集]")
+    plain = re.compile(r"^(?P<name>[^\s:：]{1,24})\s*[:：\s]\s*(?P<count>\d{1,4})\s*$")
+
+    for line in lines:
+        name = ""
+        count = 0
+
+        match = titled.search(line)
+        if match:
+            name = match.group("name")
+            count = int(match.group("count"))
+            if ("剧场版" in line or "总集篇" in line) and count <= 3:
+                skipped += 1
+                continue
+        else:
+            match = plain.match(line)
+            if match:
+                name = match.group("name")
+                count = int(match.group("count"))
+            else:
+                match = ranged.search(line)
+                if match:
+                    name = match.group("name")
+                    try:
+                        count = int(match.group("end"))
+                    except ValueError:
+                        count = 0
+
+        name = clean_text(name).strip(" 　.。、,，")
+        if not name or count <= 0:
+            continue
+        if name in seen:
+            continue
+        seen.add(name)
+        rules.append({"name": name, "count": count})
+
+    return {
+        "rules": rules,
+        "total": sum(item["count"] for item in rules),
+        "skipped": skipped,
+        "lines": len(lines),
+    }
+
+
 def build_plan(download_dir: str = None, scheme: str = None, season: int = None,
                history_paths: dict = None, season_rules: dict = None,
                force_season: bool = False) -> dict:

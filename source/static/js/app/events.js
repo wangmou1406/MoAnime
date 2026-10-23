@@ -565,6 +565,8 @@ function installEvents() {
         }
       });
     }
+    const arcBtn = $('#btn-arc-parse');
+    if (arcBtn) arcBtn.addEventListener('click', parseArcText);
   }
   $('#library-filter').addEventListener('input', debounce((e) => {
     const keyword = e.target.value.trim().toLowerCase();
