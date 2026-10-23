@@ -14,6 +14,7 @@ from core.download_engine import find_ffmpeg
 from sources.manager import source_manager
 from core.subtitle import SubtitleError
 from core import bili
+from core import dedup
 from core import organizer
 from core import subtitle
 
@@ -193,6 +194,25 @@ def _local_episode_names(anime_name: str) -> list:
     return sorted(out)
 
 
+@api.route("/library/dedup/plan", methods=["GET", "POST"])
+def library_dedup_plan():
+    """列出重复的剧集（同一部番的同一集有多份）。只看不动文件。"""
+    return ok(dedup.scan())
+
+
+@api.route("/library/dedup/apply", methods=["POST"])
+def library_dedup_apply():
+    """执行去重：默认挪到 _重复/，只有显式传 action=delete 才真删。"""
+    data = body()
+    action = data.get("action") or "move"
+    result = dedup.apply(action=action)
+    stats = result["stats"]
+    logger.info("去重完成：%s %d 个文件，释放 %.1f MB，失败 %d 个",
+                "删除" if action == "delete" else "移动",
+                stats["handled"], stats["bytes"] / 1024 / 1024, stats["failed"])
+    return ok(result)
+
+
 @api.route("/library/organize/parse-arcs", methods=["POST"])
 def library_organize_parse_arcs():
     """把用户从网页复制的分篇文字解析成「篇名 + 集数」规则。
@@ -282,8 +302,24 @@ def library_organize_apply():
 
     result = organizer.apply_plan(plan)
     stats = result["stats"]
+
+    # 整理完顺手去重：重下/换源会在同一集堆出多份，留体积最大的那份，
+    # 其余挪到 _重复/（不删除）。可以在设置里关掉。
+    dedup_stats = None
+    if bool(config.get("dedup_on_organize", True)):
+        try:
+            dedup_result = dedup.apply(action="move")
+            dedup_stats = dedup_result["stats"]
+            result["dedup"] = dedup_stats
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("整理后自动去重失败：%s", exc)
+            result["dedup"] = {"error": str(exc)[:120]}
+
     logger.info("自动整理完成：移动 %d 个、失败 %d 个、跳过 %d 个，清理空目录 %d 个",
                 stats["moved"], stats["failed"], stats["skipped"], result["pruned_dirs"])
+    if dedup_stats:
+        logger.info("自动去重：多余 %d 个（%.1f MB）已移到 _重复",
+                    dedup_stats["handled"], dedup_stats["bytes"] / 1024 / 1024)
     return ok(result)
 
 

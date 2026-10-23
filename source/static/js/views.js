@@ -706,6 +706,8 @@ SETTING_GROUPS = [
         hint: '同名视频已是 mp4 时，删掉旧的 .ts（早期未装 ffmpeg 时留下的）' },
       { key: 'keep_temp_segments', label: '保留临时分片（排错用）', type: 'switch', span: 6 },
       { key: 'verify_video', label: '完成后校验文件大小', type: 'switch', span: 6 },
+      { key: 'dedup_on_organize', label: '整理后自动去重', type: 'switch', span: 6,
+        hint: '自动整理 / 按季整理跑完后，把同一集多余的副本移到 _重复/（不删除）' },
     ],
   },
   {

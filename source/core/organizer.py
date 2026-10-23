@@ -27,7 +27,8 @@ VIDEO_EXTS = {".mp4", ".mkv", ".ts", ".avi", ".flv", ".webm", ".m4v", ".rmvb", "
 SUB_EXTS = {".ass", ".srt", ".ssa", ".vtt", ".sub", ".smi"}
 
 # 这些目录不参与整理：.tmp 是下载中的分片，其余是程序自己的数据/内核
-_SKIP_DIRS = {".tmp", "_pwt", "webview2", "node_modules", "data", "logs"}
+# _重复 是去重时挪出来的回收站，不能被当成一部番再整理回去
+_SKIP_DIRS = {".tmp", "_pwt", "webview2", "node_modules", "data", "logs", "_重复"}
 
 # 未下载完的残留后缀
 _PARTIAL_SUFFIX = (".part", ".aria2", ".!qb", ".download", ".crdownload", ".tmp")
@@ -438,6 +439,64 @@ def parse_arc_text(text: str) -> dict:
     }
 
 
+def infer_season_rules(download_dir: str) -> dict:
+    """从已有的子目录反推分季规则。
+
+    为什么需要：自动整理如果拿不到规则，就会把所有文件按 simple 方案压平到
+    `番名/第NN集.mp4` —— 已经按篇/季分好的目录会被拆散（我踩过）。
+    这里改成「看现有目录长什么样」：`番名/下沙篇/`、`番名/Season 01/` 这类子目录
+    按其中最小集号排序，相邻的差值就是上一季的集数。
+
+    返回 {番名: [{'name': 目录名, 'count': 集数}, ...]}，没有子目录的番不出现。
+    """
+    base = os.path.abspath(download_dir)
+    folders = {}          # anime -> {folder: {min, max, count}}
+    if not os.path.isdir(base):
+        return {}
+
+    for root, dirs, files in os.walk(base):
+        dirs[:] = sorted(d for d in dirs if not _is_skipped_dir(d))
+        rel = os.path.relpath(root, base)
+        if rel == ".":
+            continue
+        parts = rel.split(os.sep)
+        if len(parts) < 2:
+            continue
+        anime, folder = parts[0], parts[1]
+        if _season_of(folder) is not None:
+            continue                      # 正规 Season 目录交给方案处理，不推断
+        for name in files:
+            ext = os.path.splitext(name)[1].lower()
+            if ext not in VIDEO_EXTS or _is_skipped_file(name):
+                continue
+            number = episode_number(os.path.splitext(name)[0], 0)
+            if number <= 0:
+                continue
+            info = folders.setdefault(anime, {}).setdefault(
+                folder, {"min": number, "max": number, "count": 0})
+            info["min"] = min(info["min"], number)
+            info["max"] = max(info["max"], number)
+            info["count"] += 1
+
+    rules = {}
+    for anime, items in folders.items():
+        ordered = sorted(items.items(), key=lambda kv: kv[1]["min"])
+        if len(ordered) < 2:
+            continue
+        result = []
+        for index, (folder, info) in enumerate(ordered):
+            if index + 1 < len(ordered):
+                span = int(ordered[index + 1][1]["min"] - info["min"])
+            else:
+                span = int(info["max"] - info["min"] + 1)
+            if span <= 0:
+                continue
+            result.append({"name": folder, "count": span})
+        if len(result) >= 2:
+            rules[anime] = result
+    return rules
+
+
 def build_plan(download_dir: str = None, scheme: str = None, season: int = None,
                history_paths: dict = None, season_rules: dict = None,
                force_season: bool = False) -> dict:
@@ -455,6 +514,9 @@ def build_plan(download_dir: str = None, scheme: str = None, season: int = None,
     organize = bool(config.get("organize_by_anime", True))
     rules = {str(k).strip(): parse_season_rules(v) for k, v in (season_rules or {}).items()}
     rules = {k: v for k, v in rules.items() if v}
+    # 没给规则时，沿用已有的篇/季目录结构，避免把分好的目录压平
+    if not rules:
+        rules = infer_season_rules(base)
     if rules:
         force_season = True
 

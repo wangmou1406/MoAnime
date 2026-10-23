@@ -101,6 +101,8 @@ DEFAULT_SETTINGS = {
     "delete_ts_after_remux": True,
     "keep_temp_segments": False,
     "verify_video": True,               # 合并后校验文件
+    # 整理完自动去重：同一集有多份时把多余的挪到 _重复/（不删除）
+    "dedup_on_organize": True,
 
     # 外观与服务
     "theme": "light",                   # light | dark

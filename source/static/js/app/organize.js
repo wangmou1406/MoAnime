@@ -411,3 +411,104 @@ async function parseArcText() {
     if (button) { button.disabled = false; button.innerHTML = original; }
   }
 }
+/* ============================================================
+   去重：同一部番的同一集有多份时只留一份
+
+   判定是「番名 + 集号」，所以 第29集.mp4 / 第29集 (2).mp4 / 第29集.mkv
+   都会被认成一组。保留体积最大的；体积相同留已归档（层级更深）的那份。
+   默认只移动到 _重复/，删除要单独点。
+   ============================================================ */
+
+let dedupPlan = null;
+
+async function openDedup() {
+  showModal('modal-dedup');
+  await loadDedupPlan();
+}
+
+async function loadDedupPlan() {
+  const box = $('#dedup-list');
+  const summary = $('#dedup-summary');
+  if (!box) return;
+  box.innerHTML = '<div class="org-empty">扫描中…</div>';
+  summary.textContent = '扫描中…';
+  $('#btn-dedup-move').disabled = true;
+  $('#btn-dedup-delete').disabled = true;
+  dedupPlan = null;
+
+  const resp = await api('/api/library/dedup/plan', 'POST', {});
+  if (!resp.ok) {
+    box.innerHTML = `<div class="org-empty">扫描失败：${esc(resp.error)}</div>`;
+    summary.textContent = '扫描失败';
+    return;
+  }
+  dedupPlan = resp.data || {};
+  renderDedup(dedupPlan);
+}
+
+function renderDedup(plan) {
+  const box = $('#dedup-list');
+  const stats = plan.stats || {};
+  const groups = plan.groups || [];
+  summary.textContent = stats.groups
+    ? `${stats.groups} 组重复 · 多余 ${stats.duplicates} 个 · 可释放 ${fmtSize(stats.bytes)}`
+    : `共 ${stats.files} 个视频，没有重复`;
+
+  if (!groups.length) {
+    box.innerHTML = '<div class="org-empty">没有发现重复剧集</div>';
+    return;
+  }
+
+  box.innerHTML = groups.map((group) => `
+    <div class="org-group">${esc(group.anime)} · 第${group.episode}集</div>
+    <div class="org-row">
+      <span class="to" title="${esc(group.keep.rel)}">保留 ${esc(group.keep.rel)}</span>
+      <span class="text-dim mono" style="flex:0 0 auto;font-size:11px">${fmtSize(group.keep.size)}</span>
+      <span class="tag sub">保留</span>
+    </div>
+    ${group.extras.map((extra) => `
+      <div class="org-row skip">
+        <span class="from" title="${esc(extra.rel)}">多余 ${esc(extra.rel)}</span>
+        <span class="text-dim mono" style="flex:0 0 auto;font-size:11px">${fmtSize(extra.size)}</span>
+        <span class="tag">多余</span>
+      </div>`).join('')}
+  `).join('');
+
+  $('#btn-dedup-move').disabled = false;
+  $('#btn-dedup-delete').disabled = false;
+}
+
+async function applyDedup(action) {
+  if (!dedupPlan || !dedupPlan.stats.groups) return;
+  const stats = dedupPlan.stats;
+  if (action === 'delete') {
+    if (!confirm(`直接删除 ${stats.duplicates} 个文件（${fmtSize(stats.bytes)}）？\n\n`
+      + '删除不可恢复。不确定就先选「移到 _重复」。')) return;
+  } else if (!confirm(`把 ${stats.duplicates} 个多余文件移到 _重复/？\n\n不会删除，随时能拿回来。`)) {
+    return;
+  }
+
+  const button = $(action === 'delete' ? '#btn-dedup-delete' : '#btn-dedup-move');
+  const original = button.innerHTML;
+  button.disabled = true;
+  button.innerHTML = '<i class="bi bi-hourglass-split"></i> 处理中…';
+  try {
+    const resp = await api('/api/library/dedup/apply', 'POST', { action });
+    if (!resp.ok) { toastErr(resp.error); return; }
+    const data = resp.data || {};
+    const done = (data.stats || {}).handled || 0;
+    const failed = (data.stats || {}).failed || 0;
+    if (failed) {
+      toastWarn(`去重完成：处理 ${done} 个，失败 ${failed} 个（详情见日志）`);
+    } else {
+      toastOk(action === 'delete'
+        ? `已删除 ${done} 个重复文件`
+        : `已把 ${done} 个重复文件移到 _重复/`);
+    }
+    await loadDedupPlan();
+    await loadLibrary();
+  } finally {
+    button.disabled = false;
+    button.innerHTML = original;
+  }
+}

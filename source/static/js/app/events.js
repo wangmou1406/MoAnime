@@ -568,6 +568,18 @@ function installEvents() {
     const arcBtn = $('#btn-arc-parse');
     if (arcBtn) arcBtn.addEventListener('click', parseArcText);
   }
+
+  /* 去重：同一集多份 → 只留一份 */
+  const dedupBtn = $('#btn-library-dedup');
+  if (dedupBtn) {
+    dedupBtn.addEventListener('click', openDedup);
+    const rescan = $('#btn-dedup-rescan');
+    if (rescan) rescan.addEventListener('click', loadDedupPlan);
+    const moveBtn = $('#btn-dedup-move');
+    if (moveBtn) moveBtn.addEventListener('click', () => applyDedup('move'));
+    const delBtn = $('#btn-dedup-delete');
+    if (delBtn) delBtn.addEventListener('click', () => applyDedup('delete'));
+  }
   $('#library-filter').addEventListener('input', debounce((e) => {
     const keyword = e.target.value.trim().toLowerCase();
     $$('#library-list .lib-anime').forEach((card) => {

@@ -330,6 +330,7 @@
           <button class="btn btn-outline-light btn-sm" id="btn-library-refresh"><i class="bi bi-arrow-clockwise"></i> 重新扫描</button>
           <button class="btn btn-outline-light btn-sm" id="btn-library-organize"><i class="bi bi-magic"></i> 自动整理</button>
           <button class="btn btn-outline-light btn-sm" id="btn-library-seasons"><i class="bi bi-collection"></i> 按季整理</button>
+          <button class="btn btn-outline-light btn-sm" id="btn-library-dedup"><i class="bi bi-files"></i> 去重</button>
           <button class="btn btn-outline-light btn-sm" id="btn-library-clean"><i class="bi bi-eraser"></i> 清理失效记录</button>
           <button class="btn btn-outline-light btn-sm" id="btn-library-open"><i class="bi bi-folder2-open"></i> 打开目录</button>
         </div>
@@ -736,6 +737,39 @@
       <div class="modal-footer">
         <button class="btn btn-outline-light btn-sm" data-bs-dismiss="modal">取消</button>
         <button class="btn btn-primary btn-sm" id="btn-season-apply" disabled>按季整理</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ 去重 ============================ -->
+<div class="modal fade" id="modal-dedup" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-files"></i> 重复剧集</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="hint-box mb-3">
+          同一部番的同一集有多份时，只留体积最大的那份（残片通常只有正常文件的一小截）。
+          体积相同时留已经归档进季目录的那份。<br>
+          默认<b>只移动不删除</b>：多余的挪到下载目录下的 <code>_重复/</code>，随时能拿回来。
+        </div>
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <span class="badge badge-dim" id="dedup-summary">扫描中…</span>
+          <div class="spacer"></div>
+          <button class="btn btn-outline-light btn-sm" id="btn-dedup-rescan">
+            <i class="bi bi-arrow-clockwise"></i> 重新扫描</button>
+        </div>
+        <div id="dedup-list"><div class="org-empty">扫描中…</div></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-light btn-sm" data-bs-dismiss="modal">取消</button>
+        <button class="btn btn-outline-danger btn-sm" id="btn-dedup-delete" disabled>
+          <i class="bi bi-trash3"></i> 直接删除</button>
+        <button class="btn btn-primary btn-sm" id="btn-dedup-move" disabled>
+          <i class="bi bi-folder-symlink"></i> 移到 _重复</button>
       </div>
     </div>
   </div>
