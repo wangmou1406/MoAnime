@@ -59,7 +59,7 @@ _migrate_database_name()
 
 # 这个版本号同时用作静态资源的缓存清除参数（templates/index.html 里的 ?v=），
 # 前端有重要改动时顺手加一，确保用户一定拿到新文件而不是缓存的旧版。
-VERSION = "3.1.0"
+VERSION = "3.2.0"
 APP_NAME = "动漫下载机"                 # 界面显示用中文名
 APP_NAME_EN = "Anime Downloader"        # 对应英文名
 

@@ -68,3 +68,10 @@ desktop/webview2-host/publish/
 # ---------------------------------------------------------------- 其它
 # 广告检测中断留下的临时目录
 addetect_*/
+
+# pip 在项目根留下的临时目录（构建时出现，不属于仓库）
+pip-build-tracker-*/
+pip-ephem-wheel-cache-*/
+pip-install-*/
+pip-unpack-*/
+

@@ -17,12 +17,12 @@ VSVersionInfo(
         '080404B0',
         [StringStruct('CompanyName', 'Anime Downloader'),
          StringStruct('FileDescription', '动漫下载机 Anime Downloader'),
-         StringStruct('FileVersion', '3.1.0.0'),
+         StringStruct('FileVersion', '3.2.0.0'),
          StringStruct('InternalName', 'AnimeDownloader'),
          StringStruct('LegalCopyright', 'Anime Downloader'),
          StringStruct('OriginalFilename', '动漫下载机.exe'),
          StringStruct('ProductName', '动漫下载机 Anime Downloader'),
-         StringStruct('ProductVersion', '3.1.0.0')])
+         StringStruct('ProductVersion', '3.2.0.0')])
     ]),
     VarFileInfo([VarStruct('Translation', [2052, 1200])])
   ]

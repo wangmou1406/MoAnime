@@ -15,7 +15,7 @@ SetCompressor /SOLID lzma
 
 !define APP_NAME        "动漫下载机"
 !define APP_NAME_EN     "Anime Downloader"
-!define APP_VERSION     "3.1.0"
+!define APP_VERSION     "3.2.0"
 !define APP_EXE         "AnimeDownloader.exe"
 ; 后端 exe 也要结束，否则覆盖 backend\ 下的文件会失败
 !define BACKEND_EXE     "动漫下载机.exe"
@@ -187,7 +187,7 @@ Section "Uninstall"
 SectionEnd
 
 ; ---------------- 版本信息 ----------------
-VIProductVersion "3.1.0.0"
+VIProductVersion "3.2.0.0"
 VIAddVersionKey "ProductName"     "${APP_NAME_EN}"
 VIAddVersionKey "FileDescription" "${APP_NAME} 安装程序"
 VIAddVersionKey "FileVersion"     "${APP_VERSION}"

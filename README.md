@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab?logo=python&logoColor=white)](https://www.python.org/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20Docker-6b7280)](#平台兼容性)
-[![Version](https://img.shields.io/badge/Version-3.1.0-22c55e)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-3.2.0-22c55e)](CHANGELOG.md)
 
 > A self-hosted anime **search & download** client with a web UI.
 > Multiple pluggable sources, HLS → MP4 remux, subtitle fetching,
@@ -257,7 +257,7 @@ http://192.168.1.17:8848/?token=你的令牌
 powershell -ExecutionPolicy Bypass -File desktop\build.ps1
 ```
 
-产出免安装版 `desktop\dist\动漫下载机\` 和安装包 `desktop\dist\动漫下载机-3.1.0-Setup.exe`。
+产出免安装版 `desktop\dist\动漫下载机\` 和安装包 `desktop\dist\动漫下载机-3.2.0-Setup.exe`。
 安装包装到 `C:\Program Files\AnimeDownloader`，安装时会要一次管理员权限，自带卸载程序。
 
 界面用 System WebView 方案：宿主 `AnimeDownloader.exe` 调用 **Windows 自带的
@@ -312,7 +312,7 @@ cd "C:\Users\luoji\Desktop\项目文件\DeepSeek Harness\软件\MoAnime"
 # docker-compose.yml
 services:
   anime-downloader:
-    image: ghcr.io/wangmou1406/moanime:3.1.0
+    image: ghcr.io/wangmou1406/moanime:3.2.0
     container_name: anime-downloader
     restart: unless-stopped
     ports:
@@ -336,20 +336,20 @@ services:
 ```
 
 ```bash
-docker compose up -d     # 拉取 ghcr.io/wangmou1406/moanime:3.1.0 并启动
+docker compose up -d     # 拉取 ghcr.io/wangmou1406/moanime:3.2.0 并启动
 ```
 
 不想用 compose 也可以直接拉镜像跑：
 
 ```bash
-docker pull ghcr.io/wangmou1406/moanime:3.1.0
+docker pull ghcr.io/wangmou1406/moanime:3.2.0
 docker run -d --name anime-downloader \
   -p 8848:8848 \
   -v "$PWD/docker-data:/data" \
   -v "$PWD/downloads:/downloads" \
   -v /dev/shm:/dev/shm \
   --restart unless-stopped \
-  ghcr.io/wangmou1406/moanime:3.1.0
+  ghcr.io/wangmou1406/moanime:3.2.0
 ```
 
 以下是从源码自己构建的方式（会重新拉 Chromium，国内可能慢，见下方「国内加速」）：

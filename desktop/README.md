@@ -62,7 +62,7 @@ powershell -ExecutionPolicy Bypass -File desktop\build.ps1
 
 ```
 dist\desktop\动漫下载机\                ← 免安装版（整个文件夹拷走就能跑）
-desktop\dist\动漫下载机-3.1.0-Setup.exe ← 安装包（约 342 MB）
+desktop\dist\动漫下载机-3.2.0-Setup.exe ← 安装包（约 342 MB）
 ```
 
 ## 安装包做了什么

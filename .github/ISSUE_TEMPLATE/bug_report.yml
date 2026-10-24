@@ -29,7 +29,7 @@ body:
     attributes:
       label: 程序版本
       description: 界面右上角，或 `/api/meta` 里的 version
-      placeholder: "3.1.0"
+      placeholder: "3.2.0"
     validations:
       required: true
 
