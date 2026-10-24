@@ -62,7 +62,35 @@ docker run -d --name anime-downloader -p 8848:8848 \
   ghcr.io/wangmou1406/moanime:3.2.0
 ```
 
-也可以从源码构建：`docker compose -f docker/docker-compose.yml up -d --build`。
+或者用 compose，把两个路径改成你自己的：
+
+```yaml
+services:
+  anime-downloader:
+    image: ghcr.io/wangmou1406/moanime:3.2.0
+    container_name: anime-downloader
+    restart: unless-stopped
+    ports:
+      - "8848:8848"             # 左边被占用就改成 18848:8848
+    volumes:
+      - ./anime-data:/data       # 数据库 / 设置 / 日志
+      - ./anime:/downloads       # 视频与字幕；NAS 写 /volume1/video/anime，Windows 写 D:/Anime
+    environment:
+      AD_DOWNLOAD_DIR: /downloads
+      AD_CONCURRENT_TASKS: "3"   # 同时下载的剧集数
+    shm_size: "1gb"              # Chromium 需要足够的 /dev/shm
+```
+
+```bash
+docker compose up -d
+```
+
+从源码构建用仓库里那份，构建上下文和镜像加速参数都写好了：
+
+```bash
+docker compose -f docker/docker-compose.yml up -d --build
+```
+
 离线环境用 [Releases](https://github.com/wangmou1406/MoAnime/releases) 里的镜像归档 `docker load -i`。
 
 ### Windows 桌面版
