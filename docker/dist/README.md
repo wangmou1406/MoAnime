@@ -44,15 +44,15 @@ cp .env.example .env
 docker compose up -d
 ```
 
-> `docker-compose.yml` 里的构建上下文写的是 `..`，也就是**项目根**。
+> `docker-compose.yml` 里的构建上下文写的是 `../source`，也就是**代码目录**。
 > 如果这个交付包被单独拷走（没有源码），只能用下面的「用法 C」。
 
 ## 用法 C：从源码构建
 
-把 `Dockerfile` 拷回项目根，然后：
+构建上下文是仓库的 `source/` 目录（不是项目根）：
 
 ```bash
-docker build -t anime-downloader:latest -f Dockerfile .
+docker build -t anime-downloader:latest -f docker/Dockerfile source
 ```
 
 **国内加速**（拉 Chromium 用，约 36 秒 vs 50 分钟）：

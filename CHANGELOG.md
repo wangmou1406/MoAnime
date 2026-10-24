@@ -6,6 +6,23 @@
 
 ## [未发布]
 
+### 构建
+
+* **三种发行版同步重建**（便携 / 桌面 / Docker），此前三份产物都停在 10-18，落后源码 6 天。
+  * **便携版**：`python/build-portable.ps1` 之前还是按**旧的扁平目录**写的 —— 它去仓库根找
+    `core/`、`web/`、`data/_pwt`，而现在是 `source/` 与 `python/data/_pwt`，结果只打进去 8 个文件。
+    另外脚本把 Python 的 `"""docstring"""` 放在 `param()` 前面，PowerShell 把那段当表达式，
+    `-NoKernel` / `-NoZip` 全部失效并报 `param 不是 cmdlet`（`desktop/build.ps1` 里早写过这个坑）。
+    现已改为从 `source/` 取代码、从 `python/data/_pwt` 取内核、输出到 `python/dist/`，
+    并把 `param()` 挪到第一条语句。产物 702 MB / 524 文件，zip 298 MB。
+  * **桌面版**：PyInstaller → dotnet 宿主 → NSIS 三步全部重跑，安装包 342 MB。
+  * **Docker 版**：本机到 `deb.debian.org` 只有 ~35 KB/s（197 MB 依赖要一个半小时），
+    完整重建不现实。改为在旧镜像上只覆盖代码层 —— 依赖清单与旧镜像逐行一致（10 行），
+    ffmpeg/Node/Chromium 已在镜像里，所以 `COPY source/ /app` 即可，几十秒完成。
+    新镜像 `anime-downloader:3.1.0` 冒烟通过（`/api/meta` 正常、`/api/library/dedup/plan` 存在），
+    归档 678 MB，sha256 已更新。
+  * `docker/dist/README.md` 里「构建上下文是项目根」的说法是旧的，改为 `source/`。
+
 ### 新增
 
 * **番剧自动整理**：番剧库页面新增「自动整理」，把已经下好的文件按当前命名方案
