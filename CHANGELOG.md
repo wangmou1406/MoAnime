@@ -16,11 +16,15 @@
     现已改为从 `source/` 取代码、从 `python/data/_pwt` 取内核、输出到 `python/dist/`，
     并把 `param()` 挪到第一条语句。产物 702 MB / 524 文件，zip 298 MB。
   * **桌面版**：PyInstaller → dotnet 宿主 → NSIS 三步全部重跑，安装包 342 MB。
-  * **Docker 版**：本机到 `deb.debian.org` 只有 ~35 KB/s（197 MB 依赖要一个半小时），
-    完整重建不现实。改为在旧镜像上只覆盖代码层 —— 依赖清单与旧镜像逐行一致（10 行），
-    ffmpeg/Node/Chromium 已在镜像里，所以 `COPY source/ /app` 即可，几十秒完成。
-    新镜像 `anime-downloader:3.1.0` 冒烟通过（`/api/meta` 正常、`/api/library/dedup/plan` 存在），
-    归档 678 MB，sha256 已更新。
+  * **Docker 版**：先按「旧镜像上覆盖代码层」出过一个版本（依赖清单与镜像逐行一致，几十秒完成），
+    之后又用镜像加速**完整重建了一遍**，验证整条链路可用：
+    `APT_MIRROR=mirrors.ustc.edu.cn` + `PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple`
+    + `NPM_REGISTRY` / `NODE_DOWNLOAD_HOST` / `PLAYWRIGHT_DOWNLOAD_HOST` 走 npmmirror，
+    全程约 4 分钟（apt 58s、Node 3s、Chromium 21s、pip 72s），不加速时 apt 只有 35 KB/s。
+    坑：**pypi 清华源对容器返回 403**，pip 会报「Could not find a version that satisfies Flask>=3.0」，
+    看起来像依赖不存在，换阿里云/腾讯云即可。
+    镜像内 ffmpeg 7.1.5 + Node 22.11.0 + Chromium 156 齐全，
+    `/api/meta`、`/api/library/dedup/plan`、首页速度面板都验证通过；归档 678 MB，含 `3.1.0` 与 `latest` 两个标签。
   * `docker/dist/README.md` 里「构建上下文是项目根」的说法是旧的，改为 `source/`。
 
 ### 新增

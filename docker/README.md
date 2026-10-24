@@ -32,6 +32,29 @@ docker compose up -d --build
 docker compose up -d --build
 ```
 
+### 国内完整加速（apt / pip / Node / Chromium 四层都走镜像）
+
+这台机器实测：不加速时 apt 只有 35 KB/s，197 MB 依赖要一个半小时；换镜像后**全程约 4 分钟**。
+
+```bash
+docker build -f docker/Dockerfile \
+  --build-arg APT_MIRROR=mirrors.ustc.edu.cn \
+  --build-arg PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple \
+  --build-arg NPM_REGISTRY=https://registry.npmmirror.com \
+  --build-arg NODE_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/node \
+  --build-arg PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright \
+  -t anime-downloader:latest source
+```
+
+各层耗时参考：apt 58s、Node 3s、Chromium 21s（191 MB）、pip 72s、打包导出 24s。
+
+> **pip 源不要用清华**：`pypi.tuna.tsinghua.edu.cn` 对容器里的 pip 返回 **403 Forbidden**
+> （实测 `urllib` 直连也是 403，换 aliyun / 腾讯云都正常）。报错长这样，很容易误判成依赖不存在：
+>
+> ```
+> ERROR: Could not find a version that satisfies the requirement Flask>=3.0 (from versions: none)
+> ```
+
 ## 改下载路径
 
 ```bash
