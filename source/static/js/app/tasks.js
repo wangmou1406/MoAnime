@@ -284,14 +284,26 @@ async function bulkTask(action) {
 /* ============================================================
    下载速度曲线 + 预估剩余时间
 
-   速度每秒采一次，保留最近 60 个点，用条形图画出来。
-   剩余时间 = 所有未完成任务的剩余字节 / 当前总速度。
+   速度每秒采一次，保留最近 60 个点画成折线。
+
+   剩余时间不用后端那个瞬时 speed —— 它是在每次状态更新时现算的
+   （(now-last)/elapsed），采样间隔不固定，抖动很大：实测同一时刻
+   页面显示 953 KB/s、真实只有 698 KB/s，算出来的剩余时间一会儿 9 秒
+   一会儿 4 分钟。改成用**滑动窗口的实测速率**：
+     速率 = (最新进度 - 窗口最旧进度) / 时间差
+   窗口取 45 秒，至少要 8 秒跨度才算，样本不够时退回瞬时速度。
    ============================================================ */
 
 const SPEED_HISTORY_MAX = 60;
 let speedHistory = [];
 let speedTimer = null;
 let lastSpeedBps = 0;
+
+// 每任务的采样（用于算速率），以及全局的已下载字节合计
+const TASK_SAMPLE_WINDOW_MS = 45000;
+const RATE_MIN_SPAN_MS = 8000;
+const taskSamples = new Map();
+const globalSamples = [];
 
 function recordSpeedSample(bps) {
   lastSpeedBps = Math.max(0, Number(bps) || 0);
@@ -303,6 +315,96 @@ function recordSpeedSample(bps) {
 function ensureSpeedTimer() {
   if (speedTimer) return;
   speedTimer = setInterval(() => recordSpeedSample(lastSpeedBps), 1000);
+}
+
+/** 每次刷新任务时记录采样，供速率计算用。 */
+function recordTaskSamples(tasks) {
+  const now = Date.now();
+  let doneSum = 0;
+  (tasks || []).forEach((task) => {
+    const done = Number(task.done_bytes) || 0;
+    doneSum += done;
+    const list = taskSamples.get(task.id) || [];
+    list.push({ t: now, done, progress: Number(task.progress) || 0 });
+    while (list.length > 2 && now - list[0].t > TASK_SAMPLE_WINDOW_MS) list.shift();
+    taskSamples.set(task.id, list);
+  });
+  globalSamples.push({ t: now, done: doneSum });
+  while (globalSamples.length > 2 && now - globalSamples[0].t > TASK_SAMPLE_WINDOW_MS) {
+    globalSamples.shift();
+  }
+}
+
+/**
+ * 从采样里拟合一个速率（每秒）。
+ *
+ * 用最小二乘斜率，不用「首尾两点相减」—— 进度是阶梯式跳动的（每下一个分片才涨），
+ * 首尾取值正好落在两个跳变点之间时，斜率会差出十几秒。最小二乘把所有点都用上，
+ * 对阶梯和噪声都更稳。
+ *
+ * 只有 2 个点时直接两点定斜率（跨度够就行）—— 后台标签页里 setInterval 会被
+ * 浏览器压到每分钟一次，这时只能用得上两个点，返回 0 会导致退回瞬时速度、
+ * 算出「1 小时 39 分」而实际只要 6 分钟。
+ *
+ * 窗口内跨度不足 minSpanMs 时返回 0，让调用方走回退逻辑（不要硬算）。
+ */
+function rateFromSamples(list, key, minSpanMs) {
+  if (!list || list.length < 2) return 0;
+  const last = list[list.length - 1];
+  const window = list.filter((sample) => last.t - sample.t <= TASK_SAMPLE_WINDOW_MS);
+  if (window.length < 2) return 0;
+  const spanMs = last.t - window[0].t;
+  if (spanMs < (minSpanMs || RATE_MIN_SPAN_MS)) return 0;
+
+  if (window.length === 2) {
+    const seconds = (window[1].t - window[0].t) / 1000;
+    if (seconds <= 0) return 0;
+    const delta = (Number(window[1][key]) || 0) - (Number(window[0][key]) || 0);
+    return delta > 0 ? delta / seconds : 0;
+  }
+
+  const t0 = window[0].t;
+  const n = window.length;
+  let sumX = 0;
+  let sumY = 0;
+  let sumXY = 0;
+  let sumXX = 0;
+  window.forEach((sample) => {
+    const x = (sample.t - t0) / 1000;
+    const y = Number(sample[key]) || 0;
+    sumX += x;
+    sumY += y;
+    sumXY += x * y;
+    sumXX += x * x;
+  });
+  const denominator = n * sumXX - sumX * sumX;
+  if (Math.abs(denominator) < 1e-9) return 0;
+  const slope = (n * sumXY - sumX * sumY) / denominator;
+  return slope > 0 ? slope : 0;
+}
+
+/**
+ * 任务剩余秒数（平滑版）。
+ *
+ * 主力是「进度速率」：eta = (100 - 进度) / 每秒百分点。
+ * 速率优先用 45 秒窗口的最小二乘斜率；窗口里只有 2 个点（后台标签页被浏览器
+ * 限流到每分钟一次）时用两点斜率，也比我原来的兜底强得多。
+ *
+ * 都不够（刚打开页面不到 8 秒）就返回 0 —— **宁可不显示，也不摆一个错的数**。
+ * 之前会退回后端瞬时 speed，实测把 6 分钟算成 1 小时 39 分。
+ *
+ * 也不要改用后端 total_bytes：它是按码率估的，实测会出现「已下载 121 MB
+ * 但 total 只有 98 MB」，拿它算剩余只会越算越离谱。
+ */
+function taskEtaSecondsSmoothed(task) {
+  const progress = Number(task.progress) || 0;
+  if (!(progress > 0) || progress >= 100) return 0;
+  const rate = rateFromSamples(taskSamples.get(task.id), 'progress');
+  if (rate > 0) {
+    const seconds = (100 - progress) / rate;
+    if (Number.isFinite(seconds) && seconds > 0 && seconds <= 86400) return seconds;
+  }
+  return 0;
 }
 
 function drawSpeedChart() {
@@ -412,6 +514,7 @@ function updateSpeedPanel(stats, tasks) {
   const speed = Number((stats || {}).speed) || 0;
   lastSpeedBps = speed;
   ensureSpeedTimer();
+  recordTaskSamples(tasks);
 
   const now = $('#speed-now');
   if (now) now.textContent = speed > 0 ? `当前 ${fmtSpeed(speed)}` : '当前空闲';
@@ -433,9 +536,16 @@ function updateSpeedPanel(stats, tasks) {
     etaNode.textContent = '没有进行中的任务';
     return;
   }
-  if (speed <= 0) {
+
+  // 总量除以「实测字节速率」；样本不足时才用后端那个瞬时速度
+  const measuredRate = rateFromSamples(globalSamples, 'done');
+  const rate = measuredRate > 0 ? measuredRate : speed;
+  if (rate <= 0) {
     etaNode.textContent = `剩 ${fmtSize(remainingBytes)}（速度为 0，可能在排队或暂停）`;
     return;
   }
-  etaNode.textContent = `剩 ${fmtSize(remainingBytes)} · 预计 ${fmtEta(remainingBytes / speed)}`;
+  const seconds = remainingBytes / rate;
+  const text = Number.isFinite(seconds) && seconds > 0 ? fmtEta(seconds) : '--';
+  etaNode.textContent = `剩 ${fmtSize(remainingBytes)} · 预计 ${text}`
+    + (measuredRate > 0 ? '' : '（按瞬时速度）');
 }
