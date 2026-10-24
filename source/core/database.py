@@ -59,7 +59,10 @@ CREATE TABLE IF NOT EXISTS tasks (
     error         TEXT DEFAULT '',
     created_at    TEXT DEFAULT '',
     started_at    TEXT DEFAULT '',
-    finished_at   TEXT DEFAULT ''
+    finished_at   TEXT DEFAULT '',
+    source_id     INTEGER NOT NULL DEFAULT 0,
+    episode_url   TEXT DEFAULT '',
+    anime_url     TEXT DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS history (
@@ -120,6 +123,13 @@ class Database:
                 "ad_kind": "TEXT DEFAULT ''",
                 "hit_count": "INTEGER NOT NULL DEFAULT 0",
                 "last_ms": "INTEGER NOT NULL DEFAULT 0",
+            },
+            # 任务重试需要「从哪个源、哪个地址」解析；只存在内存里的话，
+            # 服务重启后重试会得到既没源也没地址的空任务。
+            "tasks": {
+                "source_id": "INTEGER NOT NULL DEFAULT 0",
+                "episode_url": "TEXT DEFAULT ''",
+                "anime_url": "TEXT DEFAULT ''",
             },
         }
         for table, columns in wanted.items():
@@ -282,6 +292,8 @@ class Database:
         "status", "priority", "progress", "total_bytes", "done_bytes", "speed",
         "segments_total", "segments_done", "retries", "message", "error",
         "started_at", "finished_at",
+        # 重试要用：从哪个源、哪个剧集地址解析
+        "source_id", "episode_url", "anime_url",
     )
 
     def add_task(self, data: dict) -> str:

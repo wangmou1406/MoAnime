@@ -17,6 +17,10 @@ from sources.base import UnresolvableError
 
 # 自动换源的最多尝试次数（避免在某个动漫上反复来回）
 AUTO_FALLBACK_LIMIT = 3
+# 解析视频地址拿到空结果时重试几次。源站接口会抽风（实测同一集几分钟后就好了），
+# 不重试就把任务判死太可惜；重试间隔按次数递增：3s、6s。
+RESOLVE_ATTEMPTS = 3
+RESOLVE_RETRY_DELAY = 3
 
 logger = get_logger("moanime.tasks")
 
@@ -201,6 +205,11 @@ class DownloadManager:
             "progress": 0,
             "message": "已加入队列",
             "created_at": now_str(),
+            # 落库是为了服务重启后还能重试：内存里的 control 没了就再也找不回
+            # 「从哪个源、哪个地址」解析，重试出来的任务会既没源也没地址。
+            "source_id": int(source_id) if source_id else 0,
+            "episode_url": episode_url,
+            "anime_url": anime_url,
         }
         db.add_task(record)
         control.meta["episode_num"] = record["episode_num"]
@@ -371,6 +380,75 @@ class DownloadManager:
             heapq.heappush(self._queue, item)
         return picked
 
+    @staticmethod
+    def _sleep_respecting_stop(control: "TaskControl", seconds: float) -> None:
+        """小睡一会儿，但用户按暂停/取消时立刻醒来。"""
+        end = time.time() + max(0.0, float(seconds))
+        while time.time() < end:
+            if control.stop_event.is_set() or control.is_paused():
+                return
+            time.sleep(0.2)
+
+    def _resolve_video(self, control: "TaskControl", episode_name: str, meta: dict) -> str:
+        """把剧集地址解析成可下载的视频地址。
+
+        解析偶尔会拿到空结果（源站接口限流/抖动）—— 实测过同一集几分钟后再解析就正常，
+        所以空结果会重试几次，而不是直接判死。整段抽成方法是为了能单独测。
+        """
+        video_url = meta.get("video_url") or ""
+        if video_url:
+            return video_url
+
+        source_id = meta.get("source_id")
+        episode_url = meta.get("episode_url") or ""
+        if not source_id:
+            if not str(episode_url).strip():
+                # 既没有源也没有地址：多半是早期任务重试时把源信息丢了。
+                # 绝不能静默返回 —— 任务会一直挂在「running / 0%」。
+                raise UnresolvableError(
+                    "这条任务缺少下载地址（重试时没能恢复源信息），"
+                    "请在检索结果里重新点一次下载")
+            return episode_url
+        if not str(episode_url).strip():
+            # 源站数据缺这一集：不是网络问题，重试也没用，直接说清楚
+            raise UnresolvableError(
+                "该源没有返回这一集的播放地址（源站数据缺失），换一个源试试")
+
+        from sources.manager import source_manager
+        last_exc = None
+        for attempt in range(RESOLVE_ATTEMPTS):
+            try:
+                video_url = source_manager.resolve_video_url(
+                    source_id, episode_url, meta.get("anime_url") or "", episode_name)
+                # 取流方式可能带回 Referer/Cookie（浏览器嗅探那类），存下来给下载器用
+                resolve_meta = dict(getattr(source_manager, "last_resolve_meta", {}) or {})
+                if resolve_meta:
+                    meta.update({k: v for k, v in resolve_meta.items() if v})
+            except Exception as exc:  # noqa: BLE001
+                last_exc = exc
+                video_url = ""
+            if video_url:
+                return video_url
+            # 有些资源站的剧集地址本身就是可下载的 m3u8/直链，解析不出来也能直接下；
+            # 但分享页/播放页（HTML）当视频下只会得到网页文件，那种必须报错。
+            if _looks_like_media(episode_url):
+                logger.warning("解析视频地址失败，改用剧集地址重试：%s", last_exc or "返回空")
+                return episode_url
+            if attempt + 1 < RESOLVE_ATTEMPTS:
+                delay = RESOLVE_RETRY_DELAY * (attempt + 1)
+                logger.warning("%s 解析不到地址（第 %d/%d 次：%s），%d 秒后重试",
+                               episode_name, attempt + 1, RESOLVE_ATTEMPTS,
+                               last_exc or "返回空", delay)
+                control.set(message="解析地址失败，%d 秒后重试（%d/%d）"
+                            % (delay, attempt + 1, RESOLVE_ATTEMPTS))
+                self._sleep_respecting_stop(control, delay)
+                if control.stop_event.is_set():
+                    return ""
+
+        raise UnresolvableError(
+            "源站没有返回视频地址（重试 %d 次仍为空，通常是接口限流或临时故障）；"
+            "稍后重试，或换一个源。最后一次错误：%s"
+            % (RESOLVE_ATTEMPTS, str(last_exc)[:120] if last_exc else "返回空"))
     def _run_task(self, control: TaskControl) -> None:
         meta = control.meta
         anime_name = meta["anime_name"]
@@ -378,35 +456,11 @@ class DownloadManager:
         control.set(status="running", message="准备下载")
         db.update_task(control.id, {"status": "running", "started_at": now_str()})
 
-        video_url = meta.get("video_url")
+        video_url = self._resolve_video(control, episode_name, meta)
         if not video_url:
-            source_id = meta.get("source_id")
-            episode_url = meta.get("episode_url") or ""
-            if source_id:
-                from sources.manager import source_manager
-                try:
-                    video_url = source_manager.resolve_video_url(
-                        source_id, episode_url, meta.get("anime_url") or "", episode_name)
-                    # 取流方式可能带回 Referer/Cookie（浏览器嗅探那类），
-                    # 存下来给下载器用
-                    resolve_meta = dict(getattr(source_manager, "last_resolve_meta", {}) or {})
-                    if resolve_meta:
-                        meta.update({k: v for k, v in resolve_meta.items() if v})
-                except Exception as exc:  # noqa: BLE001
-                    # 有些资源站的剧集地址本身就是可下载的 m3u8/直链，解析失败时可以直接用；
-                    # 但如果是分享页/播放页（HTML），直接当视频下载只会得到一个网页文件，必须报错。
-                    if _looks_like_media(episode_url):
-                        logger.warning("解析视频地址失败，改用剧集地址重试：%s", exc)
-                        video_url = episode_url
-                    else:
-                        raise UnresolvableError(
-                            "该源给的是分享页、解析不出视频地址；"
-                            "结果列表里带「直链可下载」标记的源可以正常下载"
-                        ) from exc
-            else:
-                video_url = episode_url
-        if not video_url:
-            raise RuntimeError("无法解析视频地址")
+            # 只有「用户中途暂停/取消」会走到这里；不标记成失败
+            logger.info("%s %s 解析阶段被中断", anime_name, episode_name)
+            return
 
         meta["video_url"] = video_url
         db.update_task(control.id, {"url": video_url})
@@ -508,24 +562,38 @@ class DownloadManager:
             raise ValueError("任务不存在")
         if record["status"] not in ("failed", "canceled"):
             raise ValueError("只有失败或已取消的任务可以重试")
-        meta = self._controls.get(task_id)
-        episode_url = ""
-        anime_url = ""
-        video_url = ""
-        source_id = None
+        # 优先用内存里的 control；服务重启后它不在，就从数据库里恢复 ——
+        # 否则重试会得到一个既没源也没地址的空任务（只会卡在「准备下载」）。
+        control = self._controls.get(task_id)
         source_name = record.get("source") or ""
-        if meta is not None:
-            episode_url = meta.meta.get("episode_url") or ""
-            anime_url = meta.meta.get("anime_url") or ""
-            source_id = meta.meta.get("source_id")
+        if control is not None:
+            episode_url = control.meta.get("episode_url") or ""
+            anime_url = control.meta.get("anime_url") or ""
+            source_id = control.meta.get("source_id")
+        else:
+            episode_url = record.get("episode_url") or ""
+            anime_url = record.get("anime_url") or ""
+            source_id = record.get("source_id") or None
+        if not episode_url and not record.get("url"):
+            raise ValueError(
+                "这条任务的源信息已经丢失（早期版本没有存剧集地址），"
+                "请在检索结果里重新点一次下载")
+        if not source_id and source_name:
+            # 只有源名时按名字找回 source_id
+            try:
+                from sources.manager import source_manager
+                found = source_manager.get_record(name=source_name)
+                if found:
+                    source_id = found["id"]
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("重试时按源名找回 source_id 失败：%s", exc)
         # 视频地址通常带时效，重试时重新解析更可靠
         db.delete_task(task_id)
         with self._lock:
             self._controls.pop(task_id, None)
-        result = self.submit(record["anime_name"], record["episode_name"], source_id=source_id,
-                             source_name=source_name, episode_url=episode_url,
-                             anime_url=anime_url, video_url=video_url)
-        return result
+        return self.submit(record["anime_name"], record["episode_name"], source_id=source_id,
+                           source_name=source_name, episode_url=episode_url,
+                           anime_url=anime_url)
 
     def pause_all(self) -> int:
         count = 0
