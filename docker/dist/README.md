@@ -6,8 +6,8 @@
 
 | 文件 | 作用 |
 | --- | --- |
-| `anime-downloader-3.2.0.tar` | **镜像归档**（`docker save` 产物，约 677 MB） |
-| `anime-downloader-3.2.0.tar.sha256` | 校验值 |
+| `anime-downloader-3.2.1.tar` | **镜像归档**（`docker save` 产物，约 677 MB） |
+| `anime-downloader-3.2.1.tar.sha256` | 校验值 |
 | `Dockerfile` | 想自己构建时用（上下文是项目根） |
 | `docker-compose.yml` | 编排文件（改下载路径就在这里） |
 | `.env.example` | compose 变量模板 |
@@ -15,7 +15,7 @@
 ## 用法 A：直接用镜像（推荐，不用构建）
 
 ```bash
-docker load -i anime-downloader-3.2.0.tar
+docker load -i anime-downloader-3.2.1.tar
 
 docker run -d --name anime-downloader \
   -p 8848:8848 \
@@ -64,8 +64,8 @@ docker compose build --build-arg PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.
 ## 校验镜像归档
 
 ```bash
-sha256sum -c anime-downloader-3.2.0.tar.sha256     # Linux / NAS
-Get-FileHash anime-downloader-3.2.0.tar -Algorithm SHA256   # Windows
+sha256sum -c anime-downloader-3.2.1.tar.sha256     # Linux / NAS
+Get-FileHash anime-downloader-3.2.1.tar -Algorithm SHA256   # Windows
 ```
 
 ## 注意

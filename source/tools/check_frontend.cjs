@@ -154,6 +154,7 @@ const JS_FILES = [
   'static/js/app/search.js',
   'static/js/app/player.js',
   'static/js/app/subtitles.js',
+  'static/js/app/danmaku.js',
   'static/js/app/tasks.js',
   'static/js/app/organize.js',
   'static/js/app/episodes.js',

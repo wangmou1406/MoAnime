@@ -601,6 +601,9 @@ views.library = function (data) {
         <button class="btn btn-outline-light btn-sm" data-act="subtitle"
                 data-anime="${esc(item.anime_name)}" title="按集号搜索并下载字幕">
           <i class="bi bi-badge-cc"></i> 下载字幕</button>
+        <button class="btn btn-outline-light btn-sm" data-act="danmaku"
+                data-anime="${esc(item.anime_name)}" title="从 B 站抓这部番每一集的弹幕，存到视频旁边">
+          <i class="bi bi-chat-square-text"></i> 下载弹幕</button>
         <button class="btn btn-outline-light btn-sm btn-icon" data-act="delete-anime"
                 data-anime="${esc(item.anime_name)}" title="删除这部番（整部）">
           <i class="bi bi-trash3"></i></button>
@@ -615,6 +618,10 @@ views.library = function (data) {
                 <span class="sub-chip" data-act="open-sub" data-path="${esc(s.path)}"
                       title="${esc(s.path)}">
                   <i class="bi bi-badge-cc"></i> ${esc(s.name.slice(-14))}</span>`).join('')}
+              ${(ep.danmaku || []).length ? `
+                <span class="sub-chip" title="${esc((ep.danmaku || [])
+                  .map((d) => (d.dir ? `${d.dir}/${d.name}` : d.name)).join(' / '))}">
+                  <i class="bi bi-chat-square-text"></i> 弹幕</span>` : ''}
             </span>
             <span>${fmtSize(ep.size)}</span>
             <span>
@@ -719,6 +726,18 @@ SETTING_GROUPS = [
       { key: 'verify_video', label: '完成后校验文件大小', type: 'switch', span: 6 },
       { key: 'dedup_on_organize', label: '整理后自动去重', type: 'switch', span: 6,
         hint: '自动整理 / 按季整理跑完后，把同一集多余的副本直接删除' },
+      { key: 'danmaku_format', label: '弹幕保存格式', type: 'select', span: 6,
+        options: [
+          { value: 'xml', label: 'XML（播放器通用，推荐）' },
+          { value: 'ass', label: 'ASS（可直接压进视频）' },
+          { value: 'both', label: '两种都存' },
+        ],
+        hint: '弹幕存在视频旁边，文件名与视频相同' },
+      { key: 'danmaku_service', label: '外部弹幕服务地址（可选）', type: 'text', span: 12,
+        placeholder: 'http://192.168.1.7:9321/87654321',
+        hint: '填 danmu_api 之类的弹弹play 兼容服务，就能抓爱奇艺/腾讯/优酷等平台的弹幕；'
+          + '留空则只用 B 站。地址末尾的 token 段可省（默认 87654321）',
+        action: { label: '测试连接', path: '/api/danmaku/service/test' } },
     ],
   },
   {
@@ -914,6 +933,16 @@ views.settingField = function (field, settings, schemes) {
              value="${esc(value || '')}">
       <button class="btn btn-outline-light btn-sm" data-pick-folder="${field.key}">
         <i class="bi bi-folder2-open"></i> 浏览</button>
+    </div>`;
+  } else if (field.type === 'text' && field.action) {
+    // 带动作按钮的输入框：比如「外部弹幕服务地址 + 测试连接」
+    control = `<div class="dir-picker">
+      <input class="form-control setting-input" id="set-${field.key}" data-key="${field.key}"
+             value="${esc(value ?? '')}" placeholder="${esc(field.placeholder || '')}">
+      <button class="btn btn-outline-light btn-sm" data-field-action="${field.key}"
+              data-action-path="${esc(field.action.path || '')}"
+              data-action-label="${esc(field.action.label || '测试')}">
+        <i class="bi bi-plug"></i> ${esc(field.action.label || '测试')}</button>
     </div>`;
   } else if (field.type === 'scheme') {
     control = `<select class="form-select setting-input" id="set-${field.key}" data-key="${field.key}">

@@ -584,6 +584,32 @@ function installEvents() {
   if (delRecords) delRecords.addEventListener('click', () => doAnimeDelete(false));
   const delFiles = $('#btn-anime-delete-files');
   if (delFiles) delFiles.addEventListener('click', () => doAnimeDelete(true));
+  /* 设置项里的「测试」按钮（例如外部弹幕服务地址） */
+  document.addEventListener('click', async (e) => {
+    const trigger = e.target.closest('[data-field-action]');
+    if (!trigger) return;
+    e.preventDefault();
+    const key = trigger.dataset.fieldAction;
+    const path = trigger.dataset.actionPath;
+    if (!path) return;
+    const input = document.getElementById(`set-${key}`);
+    const value = input ? input.value.trim() : '';
+    const original = trigger.innerHTML;
+    trigger.disabled = true;
+    trigger.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    try {
+      const resp = await api(path, 'POST', { url: value });
+      const data = (resp && resp.data) || {};
+      if (!resp.ok) { toastErr(resp.error || data.error || '连接失败'); return; }
+      if (!data.ok) { toastErr(data.error || '连接失败'); return; }
+      toastOk(`连接成功 · ${data.ms || 0} ms${data.animes ? ` · ${data.animes} 个候选` : ''}`);
+    } catch (err) {
+      toastErr(`测试失败：${err}`);
+    } finally {
+      trigger.disabled = false;
+      trigger.innerHTML = original;
+    }
+  });
   $('#library-filter').addEventListener('input', debounce((e) => {
     const keyword = e.target.value.trim().toLowerCase();
     $$('#library-list .lib-anime').forEach((card) => {
@@ -628,6 +654,10 @@ function installEvents() {
         : [];
       if (!names.length) { toastWarn('这部番剧没有已下载的剧集'); return; }
       await downloadSubtitlesFor(button.dataset.anime, names);
+    } else if (button.dataset.act === 'danmaku') {
+      e.preventDefault();
+      e.stopPropagation();
+      await downloadDanmakuFor(button, button.dataset.anime);
     } else if (button.dataset.act === 'delete') {
       if (!confirm('同时删除磁盘上的文件？此操作不可恢复')) return;
       const resp = await api('/api/library/delete', 'POST',

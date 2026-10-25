@@ -259,6 +259,9 @@ def season_detail(season_id: int) -> dict:
             "long_title": clean_text(item.get("long_title") or ""),
             "number": number if number > 0 else None,
             "ep_id": item.get("id"),
+            # 弹幕要 cid；bvid 留着方便拼播放页地址
+            "cid": item.get("cid"),
+            "bvid": item.get("bvid") or "",
         })
 
     total = result.get("total")

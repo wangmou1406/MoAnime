@@ -59,7 +59,7 @@ _migrate_database_name()
 
 # 这个版本号同时用作静态资源的缓存清除参数（templates/index.html 里的 ?v=），
 # 前端有重要改动时顺手加一，确保用户一定拿到新文件而不是缓存的旧版。
-VERSION = "3.2.0"
+VERSION = "3.2.1"
 APP_NAME = "动漫下载机"                 # 界面显示用中文名
 APP_NAME_EN = "Anime Downloader"        # 对应英文名
 
@@ -103,6 +103,12 @@ DEFAULT_SETTINGS = {
     "verify_video": True,               # 合并后校验文件
     # 整理完自动去重：同一集有多份时把多余的挪到 _重复/（不删除）
     "dedup_on_organize": True,
+    # 弹幕存成什么：xml（播放器通用）/ ass（可直接压进视频）/ both
+    "danmaku_format": "xml",
+    # 外部弹幕服务（danmu_api 之类，弹弹play 兼容接口）。填了就优先用它 ——
+    # 它能一次覆盖爱优腾芒等十几个平台；留空则只用 B 站。
+    # 形如 http://192.168.1.7:9321/87654321（末段是 token 路径，默认值可省）
+    "danmaku_service": "",
 
     # 外观与服务
     "theme": "light",                   # light | dark

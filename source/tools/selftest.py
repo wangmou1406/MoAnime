@@ -297,6 +297,16 @@ def main():
               "源 %s 个（启用 %s）" % (stats["data"]["sources_total"],
                                       stats["data"]["sources_enabled"]))
 
+        print("\n== 8b. 弹幕 ==")
+        providers = request("/api/danmaku/providers")
+        ids = [p["id"] for p in (providers.get("data") or {}).get("providers") or []]
+        check("弹幕平台列表", providers.get("ok") and "bilibili" in ids, ", ".join(ids) or "空")
+        preview = request("/api/danmaku/preview", "POST", {"anime_name": "自检不存在的番"})
+        # 没这部番时应该是「没有已下载的剧集」这种明确失败，而不是 500
+        check("弹幕预览对未知番剧给明确失败",
+              preview.get("ok") is False and "剧集" in (preview.get("error") or ""),
+              (preview.get("error") or "")[:24])
+
         print("\n== 9. 自动探测 ==")
         # 探测本地夹具页：不依赖外部站点，保证可重复执行
         fixture = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _FixtureHandler)

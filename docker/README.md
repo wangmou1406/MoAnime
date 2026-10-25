@@ -103,7 +103,7 @@ docker compose down          # 停止（挂卷数据不动）
 不想让对方自己构建，可以直接给镜像归档（在项目 `dist/` 下）：
 
 ```bash
-docker load -i anime-downloader-3.2.0.tar
+docker load -i anime-downloader-3.2.1.tar
 docker run -d --name anime -p 8848:8848 \
   -v /volume1/docker/anime-data:/data \
   -v /volume1/video/anime:/downloads \

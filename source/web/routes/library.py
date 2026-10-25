@@ -14,7 +14,9 @@ from core.database import db
 from core.download_engine import find_ffmpeg
 from sources.manager import source_manager
 from core.subtitle import SubtitleError
+from core.utils import episode_number
 from core import bili
+from core import danmaku
 from core import dedup
 from core import organizer
 from core import subtitle
@@ -24,10 +26,18 @@ from ._base import _SUB_EXT, api, body, fail, logger, ok
 from .search import episodes
 
 _SUBTITLE_EXTS = (".ass", ".srt", ".ssa", ".vtt", ".sub", ".smi")
+# 弹幕扩展名（播放器/媒体服务器认这几种；.srt 不算弹幕）
+_DANMAKU_EXTS = (".xml", ".ass", ".ssa", ".json", ".txt")
+# 允许放弹幕的子目录名
+_DANMAKU_DIRS = ("弹幕", "Danmu", "danmu", "Danmaku", "danmaku", "subtitles", "Subs")
 
 
 def _find_subtitles(video_path: str) -> list:
-    """找出与视频同目录、同主名的外挂字幕（含 第01集.zh.ass 这类语言后缀）。"""
+    """找出与视频同目录、同主名的外挂字幕（含 第01集.zh.ass 这类语言后缀）。
+
+    弹幕现在也叫 `第01集.ass`（播放器只认这个规范），所以不能只看文件名 ——
+    要读内容把弹幕挑出去，否则「有字幕」计数和字幕列表都会被污染。
+    """
     if not video_path:
         return []
     folder = os.path.dirname(video_path)
@@ -40,9 +50,14 @@ def _find_subtitles(video_path: str) -> list:
             base, ext = os.path.splitext(name)
             if ext.lower() not in _SUBTITLE_EXTS:
                 continue
+            # 早期版本的弹幕（第01集.danmaku.ass）按名字就能排除
+            if base == stem + ".danmaku" or base.endswith(".danmaku"):
+                continue
             # 主名一致，或 主名.语言（如 第01集.zh）
             if base == stem or base.startswith(stem + "."):
                 full = os.path.join(folder, name)
+                if ext.lower() in (".ass", ".ssa") and _is_danmaku_file(full):
+                    continue
                 try:
                     size = os.path.getsize(full)
                 except OSError:
@@ -50,6 +65,71 @@ def _find_subtitles(video_path: str) -> list:
                 out.append({"name": name, "path": full, "size": size})
     except OSError:
         return []
+    return out
+
+
+def _is_danmaku_file(path: str) -> bool:
+    """看内容判断这是不是弹幕文件。
+
+    播放器/媒体服务器认的是「视频主名 + .ass」，所以弹幕和字幕会撞名。
+    我们的弹幕有两个稳定特征：XML 里有 `<d p=`，ASS 里有 `Style: Danmaku`。
+    """
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(4096).decode("utf-8", "ignore")
+    except OSError:
+        return False
+    if "<d p=" in head:
+        return True
+    return "Style: Danmaku" in head
+
+
+def _find_danmaku(video_path: str) -> list:
+    """找与视频配套的弹幕文件。
+
+    按通用规范：主名一致或「主名 + 可选后缀」，扩展名限 .xml/.ass/.ssa/.json/.txt；
+    位置是视频同目录，或下面这几个子目录（`弹幕`/`danmu`/`subtitles` 等）。
+    """
+    if not video_path:
+        return []
+    folder = os.path.dirname(video_path)
+    stem = os.path.splitext(os.path.basename(video_path))[0]
+    if not os.path.isdir(folder):
+        return []
+
+    candidates = [folder]
+    for sub in _DANMAKU_DIRS:
+        sub_path = os.path.join(folder, sub)
+        if os.path.isdir(sub_path):
+            candidates.append(sub_path)
+
+    out = []
+    for base_dir in candidates:
+        try:
+            names = sorted(os.listdir(base_dir))
+        except OSError:
+            continue
+        for name in names:
+            base, ext = os.path.splitext(name)
+            if ext.lower() not in _DANMAKU_EXTS:
+                continue
+            # 主名本身，或「主名 + 后缀」（第01集.zh.ass / 第01集_弹幕.xml）
+            if not (base == stem or base.startswith(stem + ".")
+                    or base.startswith(stem + "_")):
+                continue
+            full = os.path.join(base_dir, name)
+            if not os.path.isfile(full):
+                continue
+            # .ass/.ssa/.xml 光看名字分不清是弹幕还是字幕（第54集.zh.ass 两种都可能），
+            # 所以按内容判断：XML 有 <d p=、ASS 有 Style: Danmaku 才算弹幕。
+            if ext.lower() in (".ass", ".ssa", ".xml") and not _is_danmaku_file(full):
+                continue
+            try:
+                size = os.path.getsize(full)
+            except OSError:
+                size = 0
+            out.append({"name": name, "path": full, "size": size,
+                        "dir": "" if base_dir == folder else os.path.basename(base_dir)})
     return out
 
 
@@ -67,6 +147,7 @@ def library():
         episode["size"] = episode.get("size") or (os.path.getsize(item["path"])
                                                   if episode["exists"] else 0)
         episode["subtitles"] = _find_subtitles(item.get("path") or "")
+        episode["danmaku"] = _find_danmaku(item.get("path") or "")
         entry["episodes"].append(episode)
         entry["size"] += episode["size"] or 0
 
@@ -98,7 +179,8 @@ def library():
                 "path": path,
                 "episodes": [{"episode_name": os.path.splitext(f["name"])[0], "path": f["path"],
                               "size": f["size"], "exists": True, "added_at": f["mtime"],
-                              "subtitles": _find_subtitles(f["path"])}
+                              "subtitles": _find_subtitles(f["path"]),
+                              "danmaku": _find_danmaku(f["path"])}
                              for f in sorted(files, key=lambda x: x["name"])],
                 "size": sum(f["size"] for f in files),
                 "scanned": True,
@@ -400,6 +482,205 @@ def subtitle_download():
     except Exception as exc:  # noqa: BLE001
         logger.error("字幕下载失败：%s", exc, exc_info=True)
         return fail("字幕下载失败：%s" % exc, 500)
+
+
+def _local_episode_paths(anime_name: str) -> dict:
+    """扫这部番的目录，返回 {集号: 视频绝对路径}。
+
+    取不到集号的（PV、合集之类）跳过 —— 弹幕是按集号跟 B 站对的。
+    """
+    base = config.download_dir()
+    folder = os.path.join(base, anime_name)
+    if not os.path.isdir(folder):
+        return {}
+    result = {}
+    for root, _dirs, files in os.walk(folder):
+        for name in files:
+            if name.startswith("."):
+                continue
+            stem, ext = os.path.splitext(name)
+            if ext.lower() not in (".mp4", ".mkv", ".ts", ".avi", ".flv", ".webm", ".m4v"):
+                continue
+            number = episode_number(stem, 0)
+            if number > 0 and number not in result:
+                result[int(number)] = os.path.join(root, name)
+    return result
+
+
+@api.route("/danmaku/providers", methods=["GET", "POST"])
+def danmaku_providers():
+    """能自动抓弹幕的平台：B 站总是有；配了外部服务时再加一个。"""
+    return ok({"providers": danmaku.list_providers(),
+               "default": danmaku.DEFAULT_PROVIDER,
+               "service": danmaku.service_base() or ""})
+
+
+@api.route("/danmaku/preview", methods=["GET", "POST"])
+def danmaku_preview():
+    """预览：这部番能抓哪些集。
+
+    B 站匹配得上就带上每集的 cid（失败时还能退回 B 站）；
+    匹配不上但配了外部弹幕服务时，只要本地有剧集也给出计划（全交给外服）。
+    """
+    data = body()
+    anime_name = (data.get("anime_name") or "").strip()
+    if not anime_name:
+        return fail("缺少 anime_name")
+    local = _local_episode_paths(anime_name)
+    if not local:
+        return fail("这部番还没有下载好的剧集")
+
+    service_on = bool(danmaku.service_base())
+    season = None
+    candidates = []
+    try:
+        candidates = danmaku.match(anime_name, limit=5)
+        if candidates:
+            season = danmaku.episodes(int(candidates[0]["season_id"]))
+    except danmaku.DanmakuError as exc:
+        if not service_on:
+            return fail(str(exc))
+        logger.warning("弹幕预览：B 站匹配失败（%s），改用外部服务", exc)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("弹幕预览失败：%s", exc, exc_info=True)
+        if not service_on:
+            return fail("弹幕预览失败：%s" % exc, 500)
+
+    if season is None and not service_on:
+        return fail("B 站没搜到《%s》" % anime_name)
+
+    remote = (season or {}).get("episodes") or {}
+    if remote:
+        covered = sorted(set(remote) & set(local))
+        plan = [{"number": n, "cid": remote[n].get("cid"), "path": local[n],
+                 "name": os.path.splitext(os.path.basename(local[n]))[0]}
+                for n in covered]
+    else:
+        # 只有外服：本地每一集都算进计划，cid 留空由外服按番名+集号匹配
+        plan = [{"number": n, "cid": None, "path": local[n],
+                 "name": os.path.splitext(os.path.basename(local[n]))[0]}
+                for n in sorted(local)]
+
+    return ok({
+        "anime_name": anime_name,
+        "season_id": (season or {}).get("season_id") or 0,
+        "season_title": (season or {}).get("title") or "",
+        "candidates": candidates,
+        "service": danmaku.service_base() or "",
+        "local_count": len(local),
+        "matched_count": len(plan),
+        "matched_episodes": [p["number"] for p in plan],
+        "missing": sorted(set(local) - set(remote)) if remote else [],
+        # 前端按这个列表逐集抓，好显示进度
+        "plan": plan,
+    })
+
+
+@api.route("/danmaku/episode", methods=["POST"])
+def danmaku_episode():
+    """抓单集弹幕。前端逐集调用，这样进度条能一集一集往前走。
+
+    source 可选：auto（默认，先外服再 B 站）/ service / bilibili。
+    """
+    data = body()
+    path = (data.get("path") or "").strip()
+    if not path:
+        return fail("缺少视频路径")
+    if not os.path.isfile(path):
+        return fail("视频不存在：%s" % path)
+
+    anime_name = (data.get("anime_name") or "").strip()
+    number = data.get("number")
+    source = (data.get("source") or "auto").strip().lower()
+    if source not in ("auto", "service", "bilibili"):
+        source = "auto"
+
+    cid = data.get("cid")
+    try:
+        cid = int(cid) if cid else None
+    except (TypeError, ValueError):
+        cid = None
+    if source == "bilibili" and not cid:
+        return fail("缺少 cid")
+    if source in ("auto", "bilibili") and not cid and not danmaku.service_base():
+        return fail("缺少 cid")
+
+    label = "%s 第%s集" % (anime_name, number) if anime_name and number else path
+    try:
+        result = danmaku.fetch_for_episode(anime_name or path, number or 0,
+                                           cid=cid, prefer=source)
+        if not result["items"]:
+            logger.warning("弹幕 %s：这一集没有弹幕", label)
+            return ok({"count": 0, "files": [], "message": "这一集没有弹幕"})
+        files = danmaku.save(result["items"], path,
+                             fmt=(data.get("format") or "").strip() or None, cid=cid or 0)
+    except danmaku.DanmakuError as exc:
+        logger.warning("弹幕 %s 失败：%s", label, exc)
+        return fail(str(exc))
+    except Exception as exc:  # noqa: BLE001
+        logger.error("弹幕 %s 失败：%s", label, exc, exc_info=True)
+        return fail("抓取弹幕失败：%s" % exc, 500)
+
+    logger.info("弹幕 %s：%d 条（%s）→ %s", label, result["count"],
+                result.get("source") or "?", ", ".join(os.path.basename(f) for f in files))
+    return ok({"count": result["count"], "files": files,
+               "source": result.get("source") or ""})
+
+
+@api.route("/danmaku/service/test", methods=["POST"])
+def danmaku_service_test():
+    """测试外部弹幕服务地址能不能用（设置页的「测试」按钮）。
+
+    「连不上」是正常结果，不是服务端错误 —— 统一 200 返回，前端看 data.ok。
+    """
+    data = body()
+    url = data.get("url")
+    keyword = (data.get("keyword") or "测试").strip()
+    result = danmaku.service_test(url=url, keyword=keyword)
+    if result.get("ok"):
+        logger.info("外部弹幕服务可用：%s（%d 个候选）", result.get("base"), result.get("animes") or 0)
+    else:
+        logger.warning("外部弹幕服务不可用：%s", result.get("error"))
+    return ok(result)
+
+
+@api.route("/danmaku/download", methods=["POST"])
+def danmaku_download():
+    """给这部番已下载的每一集抓弹幕，存到视频旁边。"""
+    data = body()
+    anime_name = (data.get("anime_name") or "").strip()
+    if not anime_name:
+        return fail("缺少 anime_name")
+    local = _local_episode_paths(anime_name)
+    if not local:
+        return fail("这部番还没有下载好的剧集")
+
+    only = data.get("episodes")
+    if isinstance(only, list) and only:
+        wanted = set()
+        for item in only:
+            try:
+                wanted.add(int(item))
+            except (TypeError, ValueError):
+                continue
+        local = {k: v for k, v in local.items() if k in wanted} or local
+
+    season_id = data.get("season_id")
+    fmt = (data.get("format") or "").strip() or None
+    try:
+        result = danmaku.download_for_anime(
+            anime_name, local,
+            season_id=int(season_id) if season_id else None, fmt=fmt)
+    except danmaku.DanmakuError as exc:
+        return fail(str(exc))
+    except Exception as exc:  # noqa: BLE001
+        logger.error("弹幕下载失败：%s", exc, exc_info=True)
+        return fail("弹幕下载失败：%s" % exc, 500)
+
+    logger.info("弹幕下载完成：%s 季=%s 成功 %d 集 / %d 条（跳过 %d、失败 %d）",
+                anime_name, result.get("season_id"), result["downloaded"],
+                result["count"], len(result["skipped"]), len(result["failed"]))
+    return ok(result)
 
 
 @api.route("/subtitle/auto", methods=["GET", "POST"])

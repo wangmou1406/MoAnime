@@ -2,8 +2,8 @@
 # PyInstaller 用来给 exe 写版本资源；在资源管理器「属性 → 详细信息」里能看到。
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(3, 1, 0, 0),
-    prodvers=(3, 1, 0, 0),
+    filevers=(3, 2, 1, 0),
+    prodvers=(3, 2, 1, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -17,12 +17,12 @@ VSVersionInfo(
         '080404B0',
         [StringStruct('CompanyName', 'Anime Downloader'),
          StringStruct('FileDescription', '动漫下载机 Anime Downloader'),
-         StringStruct('FileVersion', '3.2.0.0'),
+         StringStruct('FileVersion', '3.2.1.0'),
          StringStruct('InternalName', 'AnimeDownloader'),
          StringStruct('LegalCopyright', 'Anime Downloader'),
          StringStruct('OriginalFilename', '动漫下载机.exe'),
          StringStruct('ProductName', '动漫下载机 Anime Downloader'),
-         StringStruct('ProductVersion', '3.2.0.0')])
+         StringStruct('ProductVersion', '3.2.1.0')])
     ]),
     VarFileInfo([VarStruct('Translation', [2052, 1200])])
   ]

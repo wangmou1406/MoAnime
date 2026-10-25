@@ -54,7 +54,10 @@ jobs:
       - name: XML / JSON 解析单元测试
         run: python source/tools/test_xml.py
 
-      - name: 端到端自检（47 项，会起临时服务）
+      - name: 弹幕解析与输出格式单测
+        run: python source/tools/test_danmaku.py
+
+      - name: 端到端自检（49 项，会起临时服务）
         run: python source/tools/selftest.py
 
       - name: 前端脚本加载检查

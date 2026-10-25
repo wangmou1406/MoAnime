@@ -3,7 +3,7 @@
 [![CI](https://github.com/wangmou1406/MoAnime/actions/workflows/ci.yml/badge.svg)](https://github.com/wangmou1406/MoAnime/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/Version-3.2.0-22c55e)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-3.2.1-22c55e)](CHANGELOG.md)
 
 Python + Flask 写的动漫下载软件，全部操作在网页里完成：检索、下载、整理、削字幕。
 动漫源可以在页面上添加、拖拽排序、勾选启用，不用改代码。首次启动内置 13 个实测可用的源（11 个默认启用）。
@@ -24,9 +24,26 @@ Python + Flask 写的动漫下载软件，全部操作在网页里完成：检�
 | **去重** | 同一部番同一集有多份时留体积最大的，其余删除 |
 | **集数校验** | 对比 B 站官方集数，看漏了哪几集 |
 | **字幕** | 按集号搜索并下载（assrt / OpenSubtitles） |
+| **弹幕** | 按集号抓弹幕，存成 `.xml` 或 `.ass` 放在视频旁边；默认走 B 站，配了外部服务还能抓爱优腾 |
 | **广告体检** | 时长比对 + 画面文字 OCR 两路检测，标记插广告的源并降权 |
 | **速度面板** | 60 秒速度折线图，每行任务显示剩余时间 |
 | **自定义外观** | 深浅主题、配色、背景、标题、动效开关 |
+
+> 弹幕默认从 B 站抓。想覆盖爱奇艺、腾讯、优酷等平台，部署一个
+> [danmu_api](https://github.com/huangxd-/danmu_api)，把地址填进
+> 「设置 → 下载后处理 → 外部弹幕服务地址」（弹弹play 兼容接口）。
+> 填了之后优先用外部服务，取不到再退回 B 站。
+
+弹幕文件按播放器与媒体服务器（飞牛影视 / Kodi / Plex / Jellyfin）通用规范落盘：
+**视频同目录，文件名与视频一致，只把扩展名换成弹幕格式**。
+
+```
+第54集.mp4  →  第54集.xml（B 站原生）  第54集.ass（可直接压进视频）
+```
+
+也支持放在 `弹幕/`、`danmaku/`、`subtitles/` 这类子目录；命名规则是
+「视频主名 + 可选后缀 + 弹幕扩展名」（`.xml` / `.ass` / `.ssa` / `.json` / `.txt`）。
+`.srt` 不算弹幕格式。
 
 六个页面：检索 / 动漫源 / 下载任务 / 番剧库 / 设置 / 系统日志。
 
@@ -59,7 +76,7 @@ docker run -d --name anime-downloader -p 8848:8848 \
   -v /volume1/docker/anime-data:/data \
   -v /volume1/video/anime:/downloads \
   --shm-size 1gb --restart unless-stopped \
-  ghcr.io/wangmou1406/moanime:3.2.0
+  ghcr.io/wangmou1406/moanime:3.2.1
 ```
 
 或者用 compose，把两个路径改成你自己的：
@@ -67,7 +84,7 @@ docker run -d --name anime-downloader -p 8848:8848 \
 ```yaml
 services:
   anime-downloader:
-    image: ghcr.io/wangmou1406/moanime:3.2.0
+    image: ghcr.io/wangmou1406/moanime:3.2.1
     container_name: anime-downloader
     restart: unless-stopped
     ports:
@@ -95,7 +112,7 @@ docker compose -f docker/docker-compose.yml up -d --build
 
 ### Windows 桌面版
 
-下载 `MoAnime-3.2.0-Setup.exe` 安装即可。界面用系统自带的 WebView2 渲染，
+下载 `MoAnime-3.2.1-Setup.exe` 安装即可。界面用系统自带的 WebView2 渲染，
 不打包浏览器内核；Python 后端已打包进去，不需要另装 Python。
 
 ## 内置动漫源
