@@ -3,7 +3,7 @@
 [![CI](https://github.com/wangmou1406/MoAnime/actions/workflows/ci.yml/badge.svg)](https://github.com/wangmou1406/MoAnime/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab?logo=python&logoColor=white)](https://www.python.org/)
-[![Version](https://img.shields.io/badge/Version-3.2.1-22c55e)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-3.2.2-22c55e)](CHANGELOG.md)
 
 Python + Flask 写的动漫下载软件，全部操作在网页里完成：检索、下载、整理、削字幕。
 动漫源可以在页面上添加、拖拽排序、勾选启用，不用改代码。首次启动内置 13 个实测可用的源（11 个默认启用）。
@@ -76,7 +76,7 @@ docker run -d --name anime-downloader -p 8848:8848 \
   -v /volume1/docker/anime-data:/data \
   -v /volume1/video/anime:/downloads \
   --shm-size 1gb --restart unless-stopped \
-  ghcr.io/wangmou1406/moanime:3.2.1
+  ghcr.io/wangmou1406/moanime:3.2.2
 ```
 
 或者用 compose，把两个路径改成你自己的：
@@ -84,7 +84,7 @@ docker run -d --name anime-downloader -p 8848:8848 \
 ```yaml
 services:
   anime-downloader:
-    image: ghcr.io/wangmou1406/moanime:3.2.1
+    image: ghcr.io/wangmou1406/moanime:3.2.2
     container_name: anime-downloader
     restart: unless-stopped
     ports:
@@ -112,7 +112,7 @@ docker compose -f docker/docker-compose.yml up -d --build
 
 ### Windows 桌面版
 
-下载 `MoAnime-3.2.1-Setup.exe` 安装即可。界面用系统自带的 WebView2 渲染，
+下载 `MoAnime-3.2.2-Setup.exe` 安装即可。界面用系统自带的 WebView2 渲染，
 不打包浏览器内核；Python 后端已打包进去，不需要另装 Python。
 
 ## 内置动漫源

@@ -727,11 +727,9 @@ SETTING_GROUPS = [
       { key: 'dedup_on_organize', label: '整理后自动去重', type: 'switch', span: 6,
         hint: '自动整理 / 按季整理跑完后，把同一集多余的副本直接删除' },
       { key: 'danmaku_format', label: '弹幕保存格式', type: 'select', span: 6,
-        options: [
-          { value: 'xml', label: 'XML（播放器通用，推荐）' },
-          { value: 'ass', label: 'ASS（可直接压进视频）' },
-          { value: 'both', label: '两种都存' },
-        ],
+        options: [['xml', 'XML（播放器通用，推荐）'],
+                  ['ass', 'ASS（可直接压进视频）'],
+                  ['both', '两种都存']],
         hint: '弹幕存在视频旁边，文件名与视频相同' },
       { key: 'danmaku_service', label: '外部弹幕服务地址（可选）', type: 'text', span: 12,
         placeholder: 'http://192.168.1.7:9321/87654321',
@@ -982,8 +980,16 @@ views.settingField = function (field, settings, schemes) {
             data-role="range-value">${val}${esc(field.unit || '')}</span>
     </div>`;
   } else if (field.type === 'select') {
+    // 选项两种写法都认：[值, 标签] 或 { value, label }。
+    // 之前只认数组对，写成对象会抛 "object is not iterable"，
+    // 一次就把整个设置页渲染搞崩（一片空白）。
+    const opts = (field.options || []).map((opt) => {
+      if (Array.isArray(opt)) return [opt[0], opt[1]];
+      if (opt && typeof opt === 'object') return [opt.value, opt.label ?? opt.value];
+      return [opt, opt];
+    });
     control = `<select class="form-select setting-input" id="set-${field.key}" data-key="${field.key}">
-      ${(field.options || []).map(([k, label]) =>
+      ${opts.map(([k, label]) =>
         `<option value="${esc(k)}" ${k === value ? 'selected' : ''}>${esc(label)}</option>`).join('')}
     </select>`;
   } else if (field.type === 'palette') {
